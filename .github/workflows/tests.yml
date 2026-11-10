@@ -1,0 +1,63 @@
+# Builds and tests StarSyncCore, the pure-Swift half.
+#
+# The app target needs the macOS 27 SDK for PHAsset.rating, and GitHub's
+# hosted runners don't ship Xcode 27 yet, so it can't be built here. Core
+# targets macOS 14 and carries all the logic worth testing. Add an app build
+# step once a runner with Xcode 27 is available.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: StarSyncCore
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build
+        working-directory: StarSyncCore
+        run: swift build --build-tests
+
+      - name: Test
+        working-directory: StarSyncCore
+        run: swift test
+
+  fixture:
+    name: Fixture is reproducible
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      # The committed fixture must be what the generator produces, so a change
+      # to one is never silently out of step with the other.
+      - name: Regenerate the fixture
+        working-directory: StarSyncCore/Tests/StarSyncCoreTests/Fixtures
+        run: python3 make-fixture.py
+
+      - name: The committed fixture must match the generator
+        run: git diff --exit-code -- StarSyncCore/Tests/StarSyncCoreTests/Fixtures/tiny.mcat
+
+      - name: Test
+        working-directory: StarSyncCore
+        run: swift test
