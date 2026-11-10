@@ -37,7 +37,9 @@ Built with [Claude Code](https://claude.com/claude-code). More of my work at [ch
 
 ## Installing
 
-Download the latest `StarSync.dmg` from [Releases](../../releases), open it, and drag StarSync to your Applications folder. It's signed and notarized, so it opens without any warnings.
+> **No release yet.** The first signed build isn't out. Until it is, [build it yourself](#building-it-yourself) — it's two commands and a Run.
+
+Once there is one: download the latest `StarSync.dmg` from [Releases](../../releases), open it, and drag StarSync to your Applications folder. It's signed and notarized, so it opens without any warnings.
 
 The first time you run it, StarSync asks for access to your Photos library, then asks you to pick your Lightroom library. It remembers both.
 
