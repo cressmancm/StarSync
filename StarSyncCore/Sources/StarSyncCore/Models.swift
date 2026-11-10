@@ -130,6 +130,23 @@ public struct PhotoAsset: Sendable, Identifiable, Equatable {
     public var stem: String? {
         originalFilename.map { FilenameMatching.stem(of: $0) }
     }
+
+    /// The same photo with a different rating.
+    ///
+    /// Used to fold a freshly written rating back into the in-memory
+    /// snapshot, so a second pass compares against what is really in Photos
+    /// without refetching the library.
+    public func withRating(_ newRating: Int) -> PhotoAsset {
+        PhotoAsset(
+            id: id,
+            originalFilename: originalFilename,
+            creationDate: creationDate,
+            rating: newRating,
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight,
+            isEditable: isEditable
+        )
+    }
 }
 
 // MARK: - Filename handling

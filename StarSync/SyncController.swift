@@ -44,6 +44,8 @@ final class SyncController {
 
     var applyResult: PhotosWriter.Result?
     var lastRun: SyncRun?
+    /// Set after a successful revert, so the Done screen can report it.
+    var revertedCount: Int?
 
     init() {
         libraryURL = CatalogBookmark.restore()
@@ -157,9 +159,11 @@ final class SyncController {
         guard let plan else { return }
         isWorking = true
         progress = 0
+        revertedCount = nil
         statusMessage = "Writing ratings…"
         defer { isWorking = false; progress = nil; statusMessage = "" }
 
+        let written = plan.writes.map(\.photo.id)
         let result = await PhotosWriter.apply(plan: plan, catalogName: catalogName) { done, total in
             self.progress = total > 0 ? Double(done) / Double(total) : nil
             self.statusMessage = "Writing ratings… \(done) of \(total)"
@@ -167,11 +171,17 @@ final class SyncController {
 
         applyResult = result
         lastRun = result.run ?? UndoLog.shared.mostRecentRun
-        step = .apply
 
-        // Pick up the ratings that were just written, so going round again
-        // compares against what is really in Photos now.
-        await refreshPhotos()
+        // Pick up what was actually written, so going round again compares
+        // against what is really in Photos now.
+        await refreshRatings(for: written)
+
+        // Clear the working state before showing the Done screen, so Revert
+        // is live and no stale progress text is left behind.
+        isWorking = false
+        progress = nil
+        statusMessage = ""
+        step = .apply
     }
 
     func revertLastRun() async {
@@ -185,20 +195,30 @@ final class SyncController {
             self.progress = total > 0 ? Double(done) / Double(total) : nil
         }
 
+        await refreshRatings(for: run.entries.map(\.localIdentifier))
+
         if result.failed.isEmpty {
-            lastRun = UndoLog.shared.mostRecentRun
+            // The run has been undone and removed, so there is nothing left
+            // to revert; offering it again would act on an earlier run.
+            lastRun = nil
             applyResult = nil
-            statusMessage = "Put back \(result.written) ratings."
+            revertedCount = result.written
         } else {
             errorMessage = result.failed.first?.reason
         }
-        await refreshPhotos()
     }
 
-    private func refreshPhotos() async {
-        photos = await Task.detached(priority: .utility) {
-            PhotosLibrary.fetchPhotos()
+    /// Updates the in-memory snapshot for a specific set of photos.
+    ///
+    /// Only these photos changed, so only these are refetched. Refetching the
+    /// whole library here is what used to leave the Done screen sitting for
+    /// several seconds after the ratings had already landed.
+    private func refreshRatings(for identifiers: [String]) async {
+        guard !identifiers.isEmpty, photos != nil else { return }
+        let ratings = await Task.detached(priority: .userInitiated) {
+            PhotosLibrary.ratings(for: identifiers)
         }.value
+        photos?.apply(ratings: ratings)
     }
 
     // MARK: Navigation
@@ -206,6 +226,7 @@ final class SyncController {
     func reset() {
         plan = nil
         applyResult = nil
+        revertedCount = nil
         step = .source
     }
 

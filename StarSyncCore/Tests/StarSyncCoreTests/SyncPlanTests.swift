@@ -203,6 +203,44 @@ struct SyncPlanTests {
         #expect(plan.summary.contains("1 ambiguous"))
     }
 
+    // MARK: Folding a written rating back into the snapshot
+
+    @Test("withRating changes only the rating")
+    func withRating() {
+        let before = PhotoAsset(
+            id: "p1", originalFilename: "DSC_0001.jpg",
+            creationDate: Date(timeIntervalSince1970: 1_700_000_000),
+            rating: 0, pixelWidth: 6240, pixelHeight: 4160, isEditable: true
+        )
+        let after = before.withRating(5)
+
+        #expect(after.rating == 5)
+        #expect(after.id == before.id)
+        #expect(after.originalFilename == before.originalFilename)
+        #expect(after.creationDate == before.creationDate)
+        #expect(after.pixelWidth == before.pixelWidth)
+        #expect(after.pixelHeight == before.pixelHeight)
+        #expect(after.isEditable == before.isEditable)
+        // The original is untouched.
+        #expect(before.rating == 0)
+    }
+
+    @Test("a photo updated after a write no longer conflicts")
+    func writtenPhotoStopsConflicting() {
+        let asset = LRAsset(id: "a", fileName: "DSC_0001.NEF", rating: 5)
+        let before = PhotoAsset(id: "p", originalFilename: "DSC_0001.jpg",
+                                creationDate: nil, rating: 0)
+
+        let first = SyncPlanner.decide(asset: asset, photo: before, mode: .addOnly)
+        #expect(first.willWrite)
+
+        // After the write lands, planning again should find nothing to do —
+        // this is what folding the new rating back into the snapshot buys.
+        let second = SyncPlanner.decide(asset: asset, photo: before.withRating(5), mode: .addOnly)
+        #expect(second.reason == .alreadyMatches)
+        #expect(!second.willWrite)
+    }
+
     @Test("every rating 1-5 round-trips through a plan", arguments: 1...5)
     func allRatings(stars: Int) {
         let plan = SyncPlanner.plan(from: report([(stars, 0)]), mode: .addOnly)

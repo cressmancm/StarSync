@@ -93,6 +93,15 @@ enum PhotosLibrary {
     /// loading a thumbnail. Assets are refetched rather than held, so a change
     /// made in Photos.app meanwhile cannot leave StarSync writing to a stale
     /// object.
+    /// The current rating of a specific set of photos.
+    ///
+    /// After a sync only a few hundred photos have changed, so this refetches
+    /// just those. Refetching the whole library to learn them would mean
+    /// enumerating tens of thousands of assets for no reason.
+    static func ratings(for identifiers: [String]) -> [String: Int] {
+        assets(withIdentifiers: identifiers).mapValues { $0.rating.rawValue }
+    }
+
     static func assets(withIdentifiers identifiers: [String]) -> [String: PHAsset] {
         guard !identifiers.isEmpty else { return [:] }
         let result = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
@@ -105,7 +114,7 @@ enum PhotosLibrary {
 }
 
 struct PhotosSnapshot: Sendable {
-    let photos: [PhotoAsset]
+    var photos: [PhotoAsset]
     /// How many file names had to come from the resource list rather than
     /// from extended metadata. Surfaced so a library that reports none can be
     /// recognized rather than silently failing to match.
@@ -119,5 +128,14 @@ struct PhotosSnapshot: Sendable {
 
     var withoutFilename: Int {
         photos.count { $0.originalFilename?.isEmpty ?? true }
+    }
+
+    /// Folds freshly written ratings back in, leaving every other photo as it was.
+    mutating func apply(ratings: [String: Int]) {
+        guard !ratings.isEmpty else { return }
+        photos = photos.map { photo in
+            guard let rating = ratings[photo.id], rating != photo.rating else { return photo }
+            return photo.withRating(rating)
+        }
     }
 }

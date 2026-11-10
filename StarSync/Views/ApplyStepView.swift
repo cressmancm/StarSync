@@ -8,7 +8,15 @@ struct ApplyStepView: View {
         VStack(spacing: 14) {
             Spacer()
 
-            if let result = controller.applyResult {
+            if let reverted = controller.revertedCount {
+                Image(systemName: "arrow.uturn.backward.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.secondary)
+                Text(reverted == 0
+                     ? "Nothing needed putting back."
+                     : "Put \(reverted.formatted()) rating\(reverted == 1 ? "" : "s") back.")
+                    .font(.title3.weight(.medium))
+            } else if let result = controller.applyResult {
                 Image(systemName: result.failed.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 36))
                     .foregroundStyle(result.failed.isEmpty ? Color.accentColor : .orange)
