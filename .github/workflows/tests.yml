@@ -41,7 +41,7 @@ jobs:
         run: swift test
 
   fixture:
-    name: Fixture is reproducible
+    name: Fixture matches the generator
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -49,14 +49,16 @@ jobs:
         with:
           persist-credentials: false
 
-      # The committed fixture must be what the generator produces, so a change
-      # to one is never silently out of step with the other.
-      - name: Regenerate the fixture
-        working-directory: StarSyncCore/Tests/StarSyncCoreTests/Fixtures
-        run: python3 make-fixture.py
-
+      # The committed fixture must hold what the generator produces, so a
+      # change to one is never silently out of step with the other.
+      #
+      # Contents, not bytes. A SQLite file header carries the version number
+      # of the library that wrote it, so two correct runs on machines with
+      # different SQLite versions produce different files holding identical
+      # data — which is exactly what a byte comparison here used to fail on.
       - name: The committed fixture must match the generator
-        run: git diff --exit-code -- StarSyncCore/Tests/StarSyncCoreTests/Fixtures/tiny.mcat
+        working-directory: StarSyncCore/Tests/StarSyncCoreTests/Fixtures
+        run: python3 make-fixture.py --verify
 
       - name: Test
         working-directory: StarSyncCore

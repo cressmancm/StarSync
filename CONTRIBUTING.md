@@ -19,7 +19,7 @@ cd StarSyncCore
 swift test
 ```
 
-That's 63 tests against a committed fixture, in well under a second. No photo library involved and no permission prompts.
+That's 80 tests against a committed fixture, in well under a second. No photo library involved and no permission prompts.
 
 To regenerate the fixture after changing what it needs to cover:
 
@@ -29,6 +29,14 @@ python3 make-fixture.py
 ```
 
 It's standard library only — no pip install.
+
+CI checks that the committed fixture is still what the generator produces, which you can run yourself:
+
+```bash
+python3 make-fixture.py --verify
+```
+
+It compares the two databases' contents rather than their bytes, and leaves the committed file alone. Bytes can't be compared across machines: a SQLite file header records the version number of the library that wrote it, so the same generator run under a different SQLite produces a different file holding identical data.
 
 ## CI covers Core, not the app
 

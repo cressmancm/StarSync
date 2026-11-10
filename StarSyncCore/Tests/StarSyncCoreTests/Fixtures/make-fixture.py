@@ -8,15 +8,101 @@ reader has to skip, and a spread of MessagePack type widths.
 
 Standard library only. Run from this directory:
 
-    python3 make-fixture.py
+    python3 make-fixture.py            # rewrite tiny.mcat
+    python3 make-fixture.py --verify   # check the committed one still matches
+
+`--verify` builds the fixture somewhere else and compares the two databases
+row by row, leaving the committed file alone. It does not compare bytes: a
+SQLite file header carries the version number of the library that wrote it
+(bytes 96-99), so two correct runs on machines with different SQLite versions
+produce different files holding identical data. Comparing contents is the
+question actually worth asking — has the generator drifted from the fixture
+it is supposed to have produced?
 """
 
 import hashlib
 import os
 import sqlite3
 import struct
+import sys
+import tempfile
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiny.mcat")
+
+VERIFY = "--verify" in sys.argv[1:]
+TARGET = os.path.join(tempfile.mkdtemp(), "tiny.mcat") if VERIFY else OUT
+
+
+def contents(path):
+    """Every row of every table, in a stable order, for comparison."""
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        tables = sorted(
+            r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+        )
+        schema = sorted(
+            r[0] for r in con.execute(
+                "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL"
+            )
+        )
+        rows = {t: sorted(map(repr, con.execute(f"SELECT * FROM {t}"))) for t in tables}
+        return schema, rows
+    finally:
+        con.close()
+
+
+def compare(generated, committed):
+    """Reports the first real difference, or nothing at all."""
+    if not os.path.exists(committed):
+        return [f"{committed} does not exist"]
+
+    want_schema, want_rows = contents(generated)
+    got_schema, got_rows = contents(committed)
+    problems = []
+
+    if want_schema != got_schema:
+        problems.append("the schema differs")
+    if set(want_rows) != set(got_rows):
+        problems.append(
+            f"tables differ: generator has {sorted(want_rows)}, "
+            f"fixture has {sorted(got_rows)}"
+        )
+    for table in sorted(set(want_rows) & set(got_rows)):
+        want, got = want_rows[table], got_rows[table]
+        if want == got:
+            continue
+        problems.append(f"{table}: {len(want)} rows generated, {len(got)} committed")
+        only_generated = [r for r in want if r not in got]
+        only_committed = [r for r in got if r not in want]
+        for a, b in list(zip(only_generated, only_committed))[:3]:
+            problems.extend(difference(a, b))
+        for row in only_generated[len(only_committed):][:3]:
+            problems.append(f"  only the generator has: {row[:200]}")
+        for row in only_committed[len(only_generated):][:3]:
+            problems.append(f"  only the fixture has:   {row[:200]}")
+    return problems
+
+
+def difference(generated, committed, window=60):
+    """Shows where two rows part company.
+
+    These rows are mostly identical MessagePack blobs hundreds of characters
+    long, so printing their first 200 characters shows two lines that look the
+    same. The useful thing is the neighbourhood of the first difference.
+    """
+    at = next(
+        (i for i, (a, b) in enumerate(zip(generated, committed)) if a != b),
+        min(len(generated), len(committed)),
+    )
+    start = max(0, at - window // 2)
+    lead = "…" if start else ""
+    return [
+        f"  rows differ at character {at}:",
+        f"    generator: {lead}{generated[start:at + window]}",
+        f"    fixture:   {lead}{committed[start:at + window]}",
+    ]
 
 
 # --- MessagePack encoder (only what the fixture needs) ---------------------
@@ -183,10 +269,10 @@ for i, (album, asset_id) in enumerate(members):
 
 # --- Write ----------------------------------------------------------------
 
-if os.path.exists(OUT):
-    os.remove(OUT)
+if os.path.exists(TARGET):
+    os.remove(TARGET)
 
-con = sqlite3.connect(OUT)
+con = sqlite3.connect(TARGET)
 con.executescript("""
 CREATE TABLE docs(
     localDocId INTEGER PRIMARY KEY,
@@ -230,4 +316,16 @@ for local_id, (full_id, deleted, type_, subtype, record) in enumerate(docs, star
 con.commit()
 con.execute("VACUUM")
 con.close()
-print(f"wrote {OUT} ({os.path.getsize(OUT)} bytes, {len(docs)} docs)")
+
+if VERIFY:
+    problems = compare(TARGET, OUT)
+    os.remove(TARGET)
+    os.rmdir(os.path.dirname(TARGET))
+    if problems:
+        print(f"tiny.mcat is not what make-fixture.py produces ({len(docs)} docs expected):")
+        for problem in problems:
+            print(f"  {problem}")
+        sys.exit(1)
+    print(f"tiny.mcat matches the generator ({len(docs)} docs)")
+else:
+    print(f"wrote {OUT} ({os.path.getsize(OUT)} bytes, {len(docs)} docs)")
