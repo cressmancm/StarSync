@@ -12,13 +12,31 @@ enum PhotosWriter {
     /// asset cannot take a whole run down with it.
     static let batchSize = 200
 
+    /// A row that was left alone because Photos had moved on since the preview.
+    struct SkippedChange: Sendable {
+        let filename: String
+        /// What Photos holds now.
+        let liveRating: Int
+        /// What the preview was going to write.
+        let plannedRating: Int
+    }
+
     struct Result: Sendable {
         var written: Int = 0
         var failed: [(filename: String, reason: String)] = []
+        /// Rows dropped because someone rated the photo in Photos after the
+        /// preview was built. Reported rather than silently overwritten.
+        var skipped: [SkippedChange] = []
         var run: SyncRun?
     }
 
     /// Applies every row of `plan` that wants to write.
+    ///
+    /// The plan came from a snapshot, so each row is checked once more against
+    /// the rating Photos holds right now, immediately before it is written.
+    /// That is what keeps "Add only" from overwriting a rating added while the
+    /// preview was open, and it is why the undo log records the live rating
+    /// rather than the one the preview displayed.
     static func apply(
         plan: SyncPlan,
         catalogName: String,
@@ -44,7 +62,7 @@ enum PhotosWriter {
         )
 
         // Recorded before the first write, so an interrupted run is still
-        // reversible.
+        // reversible. The live ratings replace these as each batch is reached.
         do {
             try UndoLog.shared.save(run)
         } catch {
@@ -52,20 +70,71 @@ enum PhotosWriter {
             return result
         }
 
+        /// Keyed by local identifier so one entry per photo survives, whatever
+        /// its file name. Only rows that are really going to be written land
+        /// here, and each carries the rating Photos held a moment before.
+        var entries: [String: SyncRun.Entry] = [:]
         var written = 0
+
         for batch in pending.chunked(into: batchSize) {
-            let targets = Dictionary(
-                batch.map { ($0.photo.id, $0.newRating ?? $0.photo.rating) },
+            let assets = PhotosLibrary.assets(withIdentifiers: batch.map(\.photo.id))
+            let names = Dictionary(
+                batch.map { ($0.photo.id, $0.displayName) },
                 uniquingKeysWith: { first, _ in first }
             )
-            let assets = PhotosLibrary.assets(withIdentifiers: Array(targets.keys))
+
+            var targets: [String: Int] = [:]
+            for change in batch {
+                guard let asset = assets[change.photo.id] else {
+                    result.failed.append((change.displayName, "Photo is no longer in the library"))
+                    continue
+                }
+
+                let live = asset.rating.rawValue
+                switch SyncPlanner.recheck(change, liveRating: live, mode: plan.mode) {
+                case .alreadyCorrect:
+                    continue
+                case .changedInPhotos(let liveRating):
+                    result.skipped.append(
+                        SkippedChange(
+                            filename: change.displayName,
+                            liveRating: liveRating,
+                            plannedRating: change.newRating ?? liveRating
+                        )
+                    )
+                case .write(let rating):
+                    guard asset.canPerform(.properties) else {
+                        result.failed.append((change.displayName, "Photos will not let this photo change"))
+                        continue
+                    }
+                    guard PHAsset.Rating(rawValue: rating) != nil else {
+                        result.failed.append((change.displayName, "\(rating) is not a rating Photos accepts"))
+                        continue
+                    }
+                    targets[change.photo.id] = rating
+                    entries[change.photo.id] = SyncRun.Entry(
+                        localIdentifier: change.photo.id,
+                        filename: change.photo.originalFilename,
+                        oldRating: live,
+                        newRating: rating
+                    )
+                }
+            }
+
+            guard !targets.isEmpty else {
+                await progress(written, pending.count)
+                continue
+            }
+
+            // Saved with this batch's live ratings before the batch is written.
+            run.entries = sortedEntries(entries)
+            try? UndoLog.shared.save(run)
 
             do {
                 try await PHPhotoLibrary.shared().performChanges {
                     for (identifier, rating) in targets {
                         guard let asset = assets[identifier],
-                              let value = PHAsset.Rating(rawValue: rating),
-                              asset.canPerform(.properties)
+                              let value = PHAsset.Rating(rawValue: rating)
                         else { continue }
                         let request = PHAssetChangeRequest(for: asset)
                         request.rating = value
@@ -75,11 +144,12 @@ enum PhotosWriter {
             } catch {
                 // Fall back to one asset at a time so a single bad asset only
                 // costs itself, not the other 199 in the batch.
-                for change in batch {
-                    guard let asset = assets[change.photo.id],
-                          let value = PHAsset.Rating(rawValue: change.newRating ?? change.photo.rating)
+                for (identifier, rating) in targets {
+                    guard let asset = assets[identifier],
+                          let value = PHAsset.Rating(rawValue: rating)
                     else {
-                        result.failed.append((change.displayName, "Photo is no longer in the library"))
+                        result.failed.append((names[identifier] ?? "—", "Photo is no longer in the library"))
+                        entries[identifier] = nil
                         continue
                     }
                     do {
@@ -89,7 +159,9 @@ enum PhotosWriter {
                         }
                         written += 1
                     } catch {
-                        result.failed.append((change.displayName, error.localizedDescription))
+                        result.failed.append((names[identifier] ?? "—", error.localizedDescription))
+                        // Never offer to put back a write that did not land.
+                        entries[identifier] = nil
                     }
                 }
             }
@@ -98,13 +170,17 @@ enum PhotosWriter {
 
         // Keep only what actually landed, so a revert cannot try to undo a
         // write that never happened.
-        let failedNames = Set(result.failed.map(\.filename))
-        run.entries = run.entries.filter { !failedNames.contains($0.filename ?? "—") }
+        run.entries = sortedEntries(entries)
         try? UndoLog.shared.save(run)
 
         result.written = written
         result.run = run
         return result
+    }
+
+    /// Stable order, so a run on disk reads the same way twice.
+    private static func sortedEntries(_ entries: [String: SyncRun.Entry]) -> [SyncRun.Entry] {
+        entries.keys.sorted().compactMap { entries[$0] }
     }
 
     /// Puts a previous run back, restoring each photo's earlier rating.

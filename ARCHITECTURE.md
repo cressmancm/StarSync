@@ -92,6 +92,18 @@ The rules the design holds to, in order of how much they matter:
 3. Nothing is written before the person has seen the plan.
 4. Every run is recorded to `~/Library/Application Support/StarSync/runs/` **before** the first write, so an interrupted run is still reversible.
 5. A photo unrated in Lightroom never clears a rating in Photos.
+6. Every row is rechecked against the live rating in Photos immediately before it's written.
+
+### Why rule 6 exists
+
+A plan is built from a snapshot, and Photos keeps changing afterwards — someone can rate a photo in Photos.app while the preview is on screen, or while a long run is still writing. Acting on the snapshot alone meant two things could go wrong:
+
+- **A mode could break its own promise.** "Add only" means *write where Photos has no rating*. If the snapshot said unrated and Photos had since been rated, the write landed on top of it.
+- **The undo log recorded the wrong value.** `oldRating` came from the snapshot, so reverting restored the stale rating rather than the one that was actually overwritten — the edit was unrecoverable through the one button meant to recover it.
+
+So `PhotosWriter` reads each asset's current rating immediately before writing it and calls `SyncPlanner.recheck`. If Photos still holds what the preview showed, the row is written. If not, the decision is made again: `lightroomWins` still writes (a newer differing rating is still a differing rating), `addOnly` and `reviewConflicts` leave it alone and report it, and a rating the person set by hand is always honoured — they said what they wanted, and the comparison they were shown going stale doesn't withdraw the instruction. `oldRating` is always the live value, so a revert puts back what was really there.
+
+Two cheaper layers sit in front of it: `buildPlan` re-reads the ratings of just the matched photos before deciding anything, and `PhotosChangeWatcher` sets a flag so a stale preview says so and offers to rebuild. Neither can close the window on its own — the preview can go stale the instant after it's drawn, and a run can take minutes — which is why the write-time check is the one that counts.
 
 ## The test fixture
 

@@ -38,6 +38,10 @@ struct PreviewStepView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if controller.photosChangedSincePlan {
+                staleNotice
+            }
+
             if let plan {
                 Text(plan.summary)
                     .font(.headline)
@@ -85,6 +89,43 @@ struct PreviewStepView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// Shown when Photos changed while this preview was on screen.
+    ///
+    /// Applying anyway is safe — every row is checked against the live rating
+    /// before it is written — so this informs rather than blocks. Rebuilding
+    /// is offered instead of done automatically, because reshuffling the table
+    /// under someone who is reading it, and throwing away the choices they
+    /// have made in it, is not an improvement.
+    private var staleNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Ratings in Photos have changed since this preview was built.")
+                    .font(.callout.weight(.medium))
+                Text(rebuildCost)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Rebuild") {
+                Task { await controller.buildPlan() }
+            }
+            .disabled(controller.isWorking)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var rebuildCost: String {
+        let overrides = plan?.manualOverrides.count ?? 0
+        guard overrides > 0 else {
+            return "The rows below may be out of date. Nothing already rated in Photos will be overwritten."
+        }
+        return "Rebuilding will discard the \(overrides) rating\(overrides == 1 ? "" : "s") you have set here."
     }
 
     // MARK: Rows

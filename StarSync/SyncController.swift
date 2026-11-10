@@ -47,9 +47,33 @@ final class SyncController {
     /// Set after a successful revert, so the Done screen can report it.
     var revertedCount: Int?
 
+    /// True when Photos has changed since the current plan was built.
+    ///
+    /// The preview is a drawing of a moment that has passed. Applying is still
+    /// safe — every row is rechecked against the live rating before it is
+    /// written — but the numbers on screen may no longer be the ones being
+    /// compared, and the person deserves to know that rather than discover it
+    /// in the result.
+    var photosChangedSincePlan = false
+
+    private var watcher: PhotosChangeWatcher?
+
     init() {
         libraryURL = CatalogBookmark.restore()
         lastRun = UndoLog.shared.mostRecentRun
+        watcher = PhotosChangeWatcher { [weak self] in
+            self?.photosDidChange()
+        }
+    }
+
+    /// Photos told us something changed.
+    ///
+    /// Our own writes raise this too, so changes are ignored while a run is in
+    /// flight; `apply` and `revert` clear the flag themselves once they have
+    /// folded their results back in.
+    private func photosDidChange() {
+        guard !isWorking, plan != nil else { return }
+        photosChangedSincePlan = true
     }
 
     var catalogName: String {
@@ -144,12 +168,31 @@ final class SyncController {
         let mode = mode
         let allPhotos = photos.photos
 
+        // Match first: matching reads file names, dates and dimensions, never
+        // ratings, so the snapshot being out of date cannot affect it.
+        let report = await Task.detached(priority: .userInitiated) {
+            Matcher().match(assets: assets, photos: allPhotos)
+        }.value
+
+        // Then re-read the ratings of just the photos this run could touch.
+        // That is a few hundred direct lookups rather than another walk over
+        // the whole library, and it means the preview compares against what is
+        // in Photos now rather than whenever the app last loaded.
+        statusMessage = "Checking current ratings…"
+        let matched = report.matchedPhotoIdentifiers
+        let fresh = await Task.detached(priority: .userInitiated) {
+            PhotosLibrary.ratings(for: matched)
+        }.value
+        // `photos` here is the local snapshot bound by the guard above; the
+        // stored one is what the next pass will read.
+        self.photos?.apply(ratings: fresh)
+
         let plan = await Task.detached(priority: .userInitiated) {
-            let report = Matcher().match(assets: assets, photos: allPhotos)
-            return SyncPlanner.plan(from: report, mode: mode)
+            SyncPlanner.plan(from: report.updatingPhotoRatings(fresh), mode: mode)
         }.value
 
         self.plan = plan
+        photosChangedSincePlan = false
         step = .preview
     }
 
@@ -177,10 +220,12 @@ final class SyncController {
         await refreshRatings(for: written)
 
         // Clear the working state before showing the Done screen, so Revert
-        // is live and no stale progress text is left behind.
+        // is live and no stale progress text is left behind. The change
+        // notifications our own writes just raised are not news.
         isWorking = false
         progress = nil
         statusMessage = ""
+        photosChangedSincePlan = false
         step = .apply
     }
 
@@ -203,6 +248,7 @@ final class SyncController {
             lastRun = nil
             applyResult = nil
             revertedCount = result.written
+            photosChangedSincePlan = false
         } else {
             errorMessage = result.failed.first?.reason
         }

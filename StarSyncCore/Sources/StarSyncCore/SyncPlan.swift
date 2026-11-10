@@ -62,6 +62,14 @@ public struct PlannedChange: Sendable, Identifiable {
     public var newRating: Int?
     /// True when the mode deferred this to the person rather than deciding.
     public let needsReview: Bool
+    /// True when the person set this rating themselves rather than the mode
+    /// deciding it.
+    ///
+    /// It matters at write time. If Photos changed underneath the preview, a
+    /// rating the mode inferred is dropped, but one the person chose is still
+    /// written: they said what they wanted, and silently discarding that would
+    /// be worse than acting on a stale comparison.
+    public var isManualOverride: Bool
 
     public var id: String { asset.id }
     public var lightroomRating: Int { asset.rating }
@@ -78,13 +86,15 @@ public struct PlannedChange: Sendable, Identifiable {
         photo: PhotoAsset,
         reason: ChangeReason,
         newRating: Int?,
-        needsReview: Bool
+        needsReview: Bool,
+        isManualOverride: Bool = false
     ) {
         self.asset = asset
         self.photo = photo
         self.reason = reason
         self.newRating = newRating
         self.needsReview = needsReview
+        self.isManualOverride = isManualOverride
     }
 }
 
@@ -118,16 +128,21 @@ public struct SyncPlan: Sendable {
         return parts.joined(separator: " · ")
     }
 
+    /// Rows the person decided themselves.
+    public var manualOverrides: [PlannedChange] { changes.filter(\.isManualOverride) }
+
     /// Overrides one row, whatever the mode decided.
     public mutating func setRating(_ rating: Int?, for changeID: String) {
         guard let index = changes.firstIndex(where: { $0.id == changeID }) else { return }
         changes[index].newRating = rating
+        changes[index].isManualOverride = true
     }
 
     /// Resolves every row still awaiting review by taking Lightroom's rating.
     public mutating func resolveAllRemainingFromLightroom() {
         for index in changes.indices where changes[index].needsReview && changes[index].newRating == nil {
             changes[index].newRating = changes[index].asset.rating
+            changes[index].isManualOverride = true
         }
     }
 
@@ -135,8 +150,25 @@ public struct SyncPlan: Sendable {
     public mutating func keepAllRemainingFromPhotos() {
         for index in changes.indices where changes[index].needsReview && changes[index].newRating == nil {
             changes[index].newRating = changes[index].photo.rating
+            changes[index].isManualOverride = true
         }
     }
+}
+
+/// What to do with a planned row once the live rating in Photos is known.
+///
+/// A plan is built from a snapshot, and Photos keeps changing after that: the
+/// person can rate a photo in Photos.app while the preview sits on screen, or
+/// while a long run is still writing. Every row is therefore checked once more
+/// against the live rating immediately before it is written.
+public enum RecheckOutcome: Sendable, Equatable {
+    /// Write this rating.
+    case write(Int)
+    /// Nothing to do — Photos already holds the intended rating.
+    case alreadyCorrect
+    /// Photos changed since the preview, in a way this mode must not
+    /// overwrite. The row is left alone and reported.
+    case changedInPhotos(liveRating: Int)
 }
 
 public enum SyncPlanner {
@@ -207,6 +239,47 @@ public enum SyncPlanner {
                 asset: asset, photo: photo,
                 reason: reason, newRating: nil, needsReview: true
             )
+        }
+    }
+
+    /// Checks one planned row against the rating Photos holds right now.
+    ///
+    /// The plan was built from a snapshot. If that snapshot is still accurate
+    /// for this photo the row is written as planned. If Photos has moved on,
+    /// the decision is made again under the mode's own rules — because the
+    /// rule the person picked is a promise about what is in Photos, not about
+    /// what was in Photos when the preview was drawn. "Add only" that
+    /// overwrites a rating added five minutes ago has broken its promise.
+    public static func recheck(
+        _ change: PlannedChange,
+        liveRating: Int,
+        mode: SyncMode
+    ) -> RecheckOutcome {
+        guard let intended = change.newRating else { return .alreadyCorrect }
+
+        // Already where it needs to be, whoever put it there.
+        if liveRating == intended { return .alreadyCorrect }
+
+        // Photos still holds what the preview showed: no interference.
+        if liveRating == change.photo.rating { return .write(intended) }
+
+        // Photos changed underneath the preview.
+        //
+        // An explicit choice stands: the person named this rating, and the
+        // rating they were comparing against being out of date does not make
+        // their instruction go away.
+        if change.isManualOverride { return .write(intended) }
+
+        switch mode {
+        case .lightroomWins:
+            // Overwriting a differing rating is the whole point of the mode,
+            // so a newer differing rating changes nothing. The undo log
+            // records the live value, so this stays reversible.
+            return .write(intended)
+        case .addOnly, .reviewConflicts:
+            // Both only fill in blanks on their own. This one is no longer
+            // blank, so it is not theirs to fill.
+            return .changedInPhotos(liveRating: liveRating)
         }
     }
 }

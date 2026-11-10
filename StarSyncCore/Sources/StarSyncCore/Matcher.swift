@@ -207,3 +207,33 @@ public struct Matcher: Sendable {
         return calendar.date(from: components)
     }
 }
+
+extension MatchReport {
+    /// The same report with fresh Photos ratings folded into the matched photos.
+    ///
+    /// Matching looks at file names, capture times and pixel dimensions and
+    /// never at ratings, so a report stays valid when a rating changes
+    /// underneath it — only the rating itself needs replacing. That makes it
+    /// cheap to re-read the ratings of the few hundred photos a run actually
+    /// touches, rather than enumerating the whole library again.
+    public func updatingPhotoRatings(_ ratings: [String: Int]) -> MatchReport {
+        guard !ratings.isEmpty else { return self }
+        let updated = matches.map { match -> Match in
+            guard case .matched(let photo, let confidence) = match.outcome,
+                  let rating = ratings[photo.id],
+                  rating != photo.rating
+            else { return match }
+            return Match(
+                asset: match.asset,
+                outcome: .matched(photo.withRating(rating), confidence: confidence)
+            )
+        }
+        return MatchReport(matches: updated, unidentifiablePhotos: unidentifiablePhotos)
+    }
+
+    /// The identifiers of every photo this report matched, for re-reading
+    /// their ratings before a plan is built.
+    public var matchedPhotoIdentifiers: [String] {
+        matches.compactMap(\.photo?.id)
+    }
+}
