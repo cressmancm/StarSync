@@ -8,10 +8,12 @@ Releases are a signed, notarized `.dmg` attached to a GitHub release. Only the m
 - **A notarytool credential profile**, so notarization doesn't prompt every time:
 
   ```bash
-  xcrun notarytool store-credentials StarSync-Notary --apple-id <your-apple-id> --team-id 5A4TG28Q83
+  xcrun notarytool store-credentials StarSync-Notary --apple-id <your-apple-id> --team-id <your-team-id>
   ```
 
   It asks for an app-specific password, which you make at [appleid.apple.com](https://appleid.apple.com) under App-Specific Passwords. Don't use your account password.
+
+  Your team ID is on the [Membership page](https://developer.apple.com/account) of your Apple Developer account, and `security find-identity -v -p codesigning` prints it alongside the certificate names you can sign with.
 
 - **Signing** is automatic, with the team set on the StarSync target. For the release build, Xcode picks the Developer ID certificate when you export for Developer ID distribution.
 
@@ -54,7 +56,7 @@ Releases are a signed, notarized `.dmg` attached to a GitHub release. Only the m
 8. **Sign and notarize the DMG too**, so Gatekeeper is happy with the thing people actually download:
 
    ```bash
-   codesign --sign "Developer ID Application: Chad Cressman (5A4TG28Q83)" --timestamp StarSync-<version>.dmg
+   codesign --sign "Developer ID Application: <your name> (<your-team-id>)" --timestamp StarSync-<version>.dmg
    xcrun notarytool submit StarSync-<version>.dmg --keychain-profile StarSync-Notary --wait
    xcrun stapler staple StarSync-<version>.dmg
    ```
