@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Full-bleed on purpose: no rounded corners, no inset, no shadow. macOS
+       applies the squircle mask, the platform inset and the drop shadow
+       itself, so doing any of it here would do it twice. -->
+  <rect width="1024" height="1024" fill="#212d40"/>
+  <g transform="translate(-10.86,23.86) scale(8.5714)">
+    <!-- The faint star is the rating left behind on export; the solid one is it carried across.
+
+         The faint star is #4f5f7d rather than the palette's #364156. At
+         #364156 it sits at 1.35:1 against the navy and disappears entirely at
+         16px in the Dock and Finder — the half of the idea that says "this
+         rating was lost" was the half that vanished. #4f5f7d is 2.16:1, which
+         reads at 16px while staying 5.4:1 below the solid star, so the
+         hierarchy is unchanged. Same hue and saturation, lightness 40%. -->
+    <path d="M44 34.5 51.3 49.3 67.6 51.7 55.8 63.2 58.6 79.4 44 71.7 29.4 79.4 32.2 63.2 20.4 51.7 36.7 49.3Z" fill="#4f5f7d"/>
+    <path d="M78 34.5 85.3 49.3 101.6 51.7 89.8 63.2 92.6 79.4 78 71.7 63.4 79.4 66.2 63.2 54.4 51.7 70.7 49.3Z" fill="#e8ecf3"/>
+  </g>
+</svg>
