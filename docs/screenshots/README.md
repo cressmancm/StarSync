@@ -27,10 +27,9 @@ Capture the main window only (⌘⇧4 then Space, or `screencapture -o -w`), on 
 
 | File | Step | Appearance | What should be on screen |
 |---|---|---|---|
-| `preview-dark.png` | Review | Dark | The money shot. A real album with a mix: a few **New rating** rows, at least one **Conflict** awaiting a decision, and the Lightroom → Photos star columns clearly readable. "All photos" selected. |
+| `preview-dark.png` | Review | Dark | The money shot. A real album with a mix: the **Needs your decision** section open with at least one conflict in it, **Will write** below it, and the Lightroom → Photos star columns clearly readable. |
 | `preview-light.png` | Review | Light | The same album and scroll position, so the pair can be shown side by side. |
-| `source-dark.png` | Choose photos | Dark | A library chosen and an album list visible, with the "N photos, M rated" summary line. |
-| `mode-dark.png` | Choose what to sync | Dark | All three modes, with Review conflicts selected. |
+| `source-dark.png` | Choose photos | Dark | A library chosen and the album list visible, with the counts on each row and the "N albums with no rated photos hidden" footer. |
 | `apply-dark.png` | Done | Dark | A finished run — "Wrote N ratings to Photos." with Revert enabled. |
 
 Worth having if the chance comes up, since both show behaviour nothing else does:

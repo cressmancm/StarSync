@@ -5,26 +5,31 @@ import SwiftUI
 /// single row before anything is written.
 struct PreviewStepView: View {
     @Bindable var controller: SyncController
-    @State private var filter: Filter = .needsAttention
 
-    enum Filter: String, CaseIterable, Identifiable {
-        case needsAttention, willWrite, everything
+    /// The three buckets the review list is divided into.
+    ///
+    /// Deliberately not called `Section` or `Group`: both shadow SwiftUI types
+    /// used a few lines below, and the diagnostics are baffling.
+    private enum RowGroup: String, CaseIterable, Identifiable {
+        case needsDecision, willWrite, leavingAlone
         var id: String { rawValue }
 
         var title: String {
             switch self {
-            case .needsAttention: return "Needs attention"
+            case .needsDecision: return "Needs your decision"
             case .willWrite: return "Will write"
-            case .everything: return "All photos"
+            case .leavingAlone: return "Leaving alone"
             }
         }
     }
+
+    @State private var expanded: Set<RowGroup> = [.needsDecision, .willWrite]
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if rows.isEmpty {
+            if plan == nil || plan?.changes.isEmpty == true {
                 emptyState
             } else {
                 rowList
@@ -48,40 +53,10 @@ struct PreviewStepView: View {
                     .monospacedDigit()
             }
 
-            HStack(spacing: 10) {
-                Picker("", selection: $filter) {
-                    ForEach(Filter.allCases) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-
-                Spacer()
-
-                if let plan, !plan.pendingReview.isEmpty {
-                    Text("\(plan.pendingReview.count) to decide")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Take all from Lightroom") { controller.takeAllFromLightroom() }
-                    Button("Keep all from Photos") { controller.keepAllFromPhotos() }
-                }
-            }
-
             if let plan, !plan.ambiguous.isEmpty {
                 Label(
-                    "\(plan.ambiguous.count) Lightroom photos matched more than one photo in Photos and were left out. They are usually virtual copies.",
+                    "Not listed below: \(plan.ambiguous.count) Lightroom photos matched more than one photo in Photos and were left out. They are usually virtual copies.",
                     systemImage: "exclamationmark.triangle"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            if let plan, !plan.notEditable.isEmpty {
-                Label(
-                    "\(plan.notEditable.count) photos cannot be changed by StarSync, usually because they come from a shared library.",
-                    systemImage: "lock"
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -128,33 +103,105 @@ struct PreviewStepView: View {
         return "Rebuilding will discard the \(overrides) rating\(overrides == 1 ? "" : "s") you have set here."
     }
 
-    // MARK: Rows
+    // MARK: Grouping
 
-    private var rows: [PlannedChange] {
-        guard let plan else { return [] }
-        let subset: [PlannedChange]
-        switch filter {
-        case .needsAttention:
-            subset = plan.changes.filter { $0.needsReview || $0.reason == .conflict || $0.reason == .notEditable }
-        case .willWrite:
-            subset = plan.writes
-        case .everything:
-            subset = plan.changes
-        }
-        // Rows that want a decision come first, then conflicts, then writes.
-        return subset.sorted { a, b in
-            if a.sortRank != b.sortRank { return a.sortRank < b.sortRank }
-            return a.displayName.localizedStandardCompare(b.displayName) == .orderedAscending
+    /// Which bucket a row belongs in. Exactly one is true for every row: a
+    /// row waiting on a decision has no rating to write, and anything that is
+    /// neither waiting nor writing is being left alone.
+    private func belongs(_ change: PlannedChange, to group: RowGroup) -> Bool {
+        let waiting = change.needsReview && change.newRating == nil
+        switch group {
+        case .needsDecision: return waiting
+        case .willWrite: return change.willWrite
+        case .leavingAlone: return !waiting && !change.willWrite
         }
     }
 
+    private func count(for group: RowGroup) -> Int {
+        // count(where:) rather than filter().count — no need to copy a
+        // couple of thousand rows just to size a header.
+        plan?.changes.count(where: { belongs($0, to: group) }) ?? 0
+    }
+
+    /// Already in display order: `SyncPlanner.plan` sorts `changes` by name,
+    /// and filtering keeps that order.
+    private func rows(for group: RowGroup) -> [PlannedChange] {
+        plan?.changes.filter { belongs($0, to: group) } ?? []
+    }
+
+    private var visibleGroups: [RowGroup] {
+        RowGroup.allCases.filter { count(for: $0) > 0 }
+    }
+
+    private func isExpanded(_ group: RowGroup) -> Bool {
+        // A lone group cannot be collapsed into an empty screen.
+        expanded.contains(group) || visibleGroups.count == 1
+    }
+
+    private func toggle(_ group: RowGroup) {
+        // No animation: inserting or removing a couple of thousand rows inside
+        // an animated transaction stutters badly. Only the chevron animates.
+        if expanded.contains(group) {
+            expanded.remove(group)
+        } else {
+            expanded.insert(group)
+        }
+    }
+
+    /// The breakdown under "Leaving alone", so the detail survives the section
+    /// being collapsed — which it is by default.
+    private func subtitle(for group: RowGroup) -> String? {
+        guard group == .leavingAlone, let plan else { return nil }
+        var matches = 0, notRated = 0, readOnly = 0, chosen = 0
+        for change in plan.changes where belongs(change, to: .leavingAlone) {
+            switch change.reason {
+            case .alreadyMatches: matches += 1
+            case .notRatedInLightroom: notRated += 1
+            case .notEditable: readOnly += 1
+            // A conflict resolved to the rating Photos already holds. Without
+            // this, pressing "Keep all from Photos" makes rows seem to vanish.
+            case .newRating, .conflict: chosen += 1
+            }
+        }
+        var parts: [String] = []
+        if matches > 0 { parts.append("\(matches.formatted()) already match") }
+        if notRated > 0 { parts.append("\(notRated.formatted()) not rated in Lightroom") }
+        if readOnly > 0 { parts.append("\(readOnly.formatted()) read-only") }
+        if chosen > 0 { parts.append("\(chosen.formatted()) you chose to leave") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: Rows
+
     private var rowList: some View {
-        List(rows) { change in
-            PreviewRow(
-                change: change,
-                onSet: { controller.setRating($0, for: change.id) }
-            )
-            .padding(.vertical, 2)
+        List {
+            ForEach(visibleGroups) { group in
+                Section {
+                    GroupHeaderRow(
+                        title: group.title,
+                        count: count(for: group),
+                        subtitle: subtitle(for: group),
+                        isExpanded: isExpanded(group),
+                        toggle: { toggle(group) }
+                    ) {
+                        if group == .needsDecision {
+                            Button("Take all from Lightroom") { controller.takeAllFromLightroom() }
+                            Button("Keep all from Photos") { controller.keepAllFromPhotos() }
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+
+                    if isExpanded(group) {
+                        ForEach(rows(for: group)) { change in
+                            PreviewRow(
+                                change: change,
+                                onSet: { controller.setRating($0, for: change.id) }
+                            )
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+            }
         }
         .listStyle(.inset)
         .alternatingRowBackgrounds()
@@ -166,23 +213,62 @@ struct PreviewStepView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 28))
                 .foregroundStyle(.tertiary)
-            Text(emptyMessage)
+            Text("No photos in this selection could be matched to your Photos library.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 340)
             Spacer()
         }
     }
+}
 
-    private var emptyMessage: String {
-        switch filter {
-        case .needsAttention:
-            return "Nothing needs a decision."
-        case .willWrite:
-            return "No ratings need writing — Photos already matches Lightroom for these photos."
-        case .everything:
-            return "No photos in this selection could be matched to your Photos library."
+/// A section header that is a list row: a disclosure button on the left, and
+/// whatever actions the section needs as its siblings on the right.
+///
+/// The chevron is drawn here rather than using `Section(isExpanded:)` because
+/// that API's disclosure affordance is tied to the sidebar list style, and
+/// sidebar does not draw the alternating row backgrounds this table wants.
+private struct GroupHeaderRow<Trailing: View>: View {
+    let title: String
+    let count: Int
+    let subtitle: String?
+    let isExpanded: Bool
+    let toggle: () -> Void
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: toggle) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.easeOut(duration: 0.15), value: isExpanded)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(title) (\(count.formatted()))")
+                            .font(.callout.weight(.semibold))
+                            .monospacedDigit()
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("\(title), \(count) photos")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Shows or hides these photos")
+
+            Spacer(minLength: 8)
+            trailing
         }
+        .padding(.vertical, 2)
     }
 }
 
@@ -252,14 +338,6 @@ private struct PreviewRow: View {
 // MARK: - Row presentation
 
 extension PlannedChange {
-    var sortRank: Int {
-        if needsReview && newRating == nil { return 0 }
-        if reason == .conflict { return 1 }
-        if reason == .notEditable { return 2 }
-        if willWrite { return 3 }
-        return 4
-    }
-
     var badgeText: String {
         switch reason {
         case .newRating: return "New rating"
