@@ -2,10 +2,24 @@
 
 **None have been taken yet.** This file is the shot list, so whoever takes them gets a consistent set.
 
-Screen Recording was the first thing in the way; Chip granted it on 2026-11-12 and capture works now. Two things are left:
+Permissions are no longer the problem. Chip granted Screen Recording and Accessibility on 2026-11-12, so a session can both capture the screen and drive the app. Two things are left, and both need him:
 
-1. **Nobody is at the Mac.** A capture of a locked Mac is the login window, not the app. Only Chip can unlock it.
-2. **No Accessibility permission.** Taking this set means driving the app through all four steps, and clicking from a script needs System Settings → Privacy & Security → Accessibility. Without it `osascript` gets *"not allowed assistive access"*, so the app can be launched but not used. Granting it hands any script on this Mac the ability to click and type anywhere, which is a bigger thing to hand over than screen capture was — Chip taking the five shots himself is both faster and less to give away.
+1. **Nobody is signed in.** A capture of a locked Mac is the login window, not the app. Only Chip can unlock it.
+2. **The demo album needs to be an ordinary album, not a smart one.** See below.
+
+### Why a smart album won't do
+
+Chip made a Lightroom album called **StarSync Demo** on 2026-11-12 to supply safe, publishable photos for these shots. It was created as a *smart* album, and StarSync cannot read it. From the catalog directly:
+
+- `fullDocId 9b0d6e3911604196948b40ca9b2d1c54`, subtype **`smart`** — the only smart album in the catalog.
+- Its membership is a stored **predicate on `rating`**, not a list of photos.
+- It has **zero** `album_asset` rows. The membership is computed by Lightroom and exists nowhere in the catalog file.
+
+StarSync builds album membership from `album_asset`, and `SyncController.swift:86` offers only `.collection` and `.project` albums. So a smart album never appears in the picker, and would read as 0 photos if it did.
+
+**The fix is on Chip's side:** select the photos and make a plain New Album rather than a New Smart Album. Any name will do.
+
+This is also worth knowing about the app itself, separately from the screenshots: anyone who organises Lightroom with smart albums will find them missing from StarSync's list with nothing on screen to say why. Either list them or say they aren't supported — a decision for after 1.0, not a release blocker.
 
 ## What's needed
 
