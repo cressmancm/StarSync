@@ -9,12 +9,11 @@ import StarSyncCore
 final class SyncController {
 
     enum Step: Int, CaseIterable {
-        case source, mode, preview, apply
+        case source, preview, apply
 
         var title: String {
             switch self {
             case .source: return "Choose photos"
-            case .mode: return "Choose what to sync"
             case .preview: return "Review"
             case .apply: return "Done"
             }
@@ -34,7 +33,6 @@ final class SyncController {
     var catalog: LRCatalog?
     var photos: PhotosSnapshot?
     var scope: Scope = .wholeCatalog
-    var mode: SyncMode = .reviewConflicts
     var plan: SyncPlan?
 
     var isWorking = false
@@ -84,6 +82,36 @@ final class SyncController {
         // Collections and projects hold photos; a collection set is only a
         // folder, so it would always come up empty.
         (catalog?.albums ?? []).filter { $0.kind == .collection || $0.kind == .project }
+    }
+
+    /// One album as the chooser needs it, with its counts already worked out.
+    ///
+    /// The counts drive the filter and the sort as well as the label, so they
+    /// are resolved once here rather than per row while the list draws.
+    struct AlbumRow: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let isProject: Bool
+        let photoCount: Int
+        let ratedCount: Int
+
+        /// Albums with nothing rated can only ever produce an empty plan.
+        var hasNothingToSync: Bool { ratedCount == 0 }
+    }
+
+    var albumRows: [AlbumRow] {
+        guard let catalog else { return [] }
+        let byID = catalog.assetsByID
+        return albums.map { album in
+            let assets = album.assetIDs.compactMap { byID[$0] }
+            return AlbumRow(
+                id: album.id,
+                name: album.name,
+                isProject: album.kind == .project,
+                photoCount: assets.count,
+                ratedCount: assets.count(where: \.isRated)
+            )
+        }
     }
 
     /// The Lightroom photos the current scope covers.
@@ -165,7 +193,6 @@ final class SyncController {
         defer { isWorking = false; statusMessage = "" }
 
         let assets = scopedAssets
-        let mode = mode
         let allPhotos = photos.photos
 
         // Match first: matching reads file names, dates and dimensions, never
@@ -188,7 +215,7 @@ final class SyncController {
         self.photos?.apply(ratings: fresh)
 
         let plan = await Task.detached(priority: .userInitiated) {
-            SyncPlanner.plan(from: report.updatingPhotoRatings(fresh), mode: mode)
+            SyncPlanner.plan(from: report.updatingPhotoRatings(fresh))
         }.value
 
         self.plan = plan

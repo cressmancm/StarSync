@@ -1,44 +1,5 @@
 import Foundation
 
-/// How a run treats photos that already carry a rating in Apple Photos.
-///
-/// Every preset leaves a Lightroom photo at 0★ alone: in Lightroom, zero
-/// means "not triaged yet", so it is never allowed to clear a rating that
-/// exists in Photos.
-public enum SyncMode: String, Sendable, CaseIterable, Identifiable {
-    /// Fill in ratings where Photos has none. Never changes an existing one.
-    ///
-    /// This also covers "don't overwrite when there's a mismatch" — both
-    /// requests describe the same write set.
-    case addOnly
-    /// Lightroom is the source of truth: overwrite a differing rating.
-    case lightroomWins
-    /// Fill in the blanks automatically, and collect every mismatch for
-    /// review rather than deciding it.
-    case reviewConflicts
-
-    public var id: String { rawValue }
-
-    public var title: String {
-        switch self {
-        case .addOnly: return "Add only"
-        case .lightroomWins: return "Lightroom wins"
-        case .reviewConflicts: return "Review conflicts"
-        }
-    }
-
-    public var explanation: String {
-        switch self {
-        case .addOnly:
-            return "Rate photos that have no rating in Photos yet. Anything already rated is left untouched."
-        case .lightroomWins:
-            return "Make Photos match Lightroom, replacing ratings that differ. Photos rated in Photos but not in Lightroom keep their rating."
-        case .reviewConflicts:
-            return "Rate the photos that have no rating yet, and ask about each one where Lightroom and Photos disagree."
-        }
-    }
-}
-
 /// Why a photo is being written, skipped, or held for review.
 public enum ChangeReason: String, Sendable, Equatable {
     /// Photos has no rating; Lightroom has one.
@@ -54,19 +15,19 @@ public enum ChangeReason: String, Sendable, Equatable {
 }
 
 /// What will happen to one photo.
-public struct PlannedChange: Sendable, Identifiable {
+public struct PlannedChange: Sendable, Identifiable, Equatable {
     public let asset: LRAsset
     public let photo: PhotoAsset
     public let reason: ChangeReason
     /// The rating to write, or nil to leave the photo as it is.
     public var newRating: Int?
-    /// True when the mode deferred this to the person rather than deciding.
+    /// True when planning deferred this to the person rather than deciding.
     public let needsReview: Bool
-    /// True when the person set this rating themselves rather than the mode
+    /// True when the person set this rating themselves rather than planning
     /// deciding it.
     ///
     /// It matters at write time. If Photos changed underneath the preview, a
-    /// rating the mode inferred is dropped, but one the person chose is still
+    /// rating that was inferred is dropped, but one the person chose is still
     /// written: they said what they wanted, and silently discarding that would
     /// be worse than acting on a stale comparison.
     public var isManualOverride: Bool
@@ -74,6 +35,10 @@ public struct PlannedChange: Sendable, Identifiable {
     public var id: String { asset.id }
     public var lightroomRating: Int { asset.rating }
     public var photosRating: Int { photo.rating }
+
+    /// What to call this photo on screen. Photos' own filename where it has
+    /// one, since that is what the person sees in Photos.app.
+    public var displayName: String { photo.originalFilename ?? asset.fileName }
 
     /// Whether this row will write when the plan is applied.
     public var willWrite: Bool {
@@ -100,15 +65,14 @@ public struct PlannedChange: Sendable, Identifiable {
 
 /// Everything a run intends to do, ready to show before anything is written.
 public struct SyncPlan: Sendable {
-    public let mode: SyncMode
+    /// Every matched photo, in the order they are shown: by display name.
     public var changes: [PlannedChange]
     /// Lightroom photos with no counterpart in Photos.
     public let unmatchedCount: Int
     /// Lightroom photos whose counterpart could not be identified uniquely.
     public let ambiguous: [Match]
 
-    public init(mode: SyncMode, changes: [PlannedChange], unmatchedCount: Int, ambiguous: [Match]) {
-        self.mode = mode
+    public init(changes: [PlannedChange], unmatchedCount: Int, ambiguous: [Match]) {
         self.changes = changes
         self.unmatchedCount = unmatchedCount
         self.ambiguous = ambiguous
@@ -131,7 +95,7 @@ public struct SyncPlan: Sendable {
     /// Rows the person decided themselves.
     public var manualOverrides: [PlannedChange] { changes.filter(\.isManualOverride) }
 
-    /// Overrides one row, whatever the mode decided.
+    /// Overrides one row, whatever planning decided.
     public mutating func setRating(_ rating: Int?, for changeID: String) {
         guard let index = changes.firstIndex(where: { $0.id == changeID }) else { return }
         changes[index].newRating = rating
@@ -166,30 +130,43 @@ public enum RecheckOutcome: Sendable, Equatable {
     case write(Int)
     /// Nothing to do — Photos already holds the intended rating.
     case alreadyCorrect
-    /// Photos changed since the preview, in a way this mode must not
-    /// overwrite. The row is left alone and reported.
+    /// Photos changed since the preview, so the row is left alone and
+    /// reported rather than overwritten.
     case changedInPhotos(liveRating: Int)
 }
 
 public enum SyncPlanner {
-    /// Turns a match report into a plan under the chosen mode.
-    public static func plan(from report: MatchReport, mode: SyncMode) -> SyncPlan {
+    /// Turns a match report into a plan.
+    ///
+    /// Photos with no rating in Photos are filled in automatically. Where both
+    /// sides hold a rating and they differ, nothing is decided here: the row is
+    /// held for the person, because five stars against four is not a call this
+    /// code is in a position to make.
+    ///
+    /// A Lightroom photo at 0★ is always left alone. Zero means "not triaged
+    /// yet", so it is never allowed to clear a rating that exists in Photos.
+    public static func plan(from report: MatchReport) -> SyncPlan {
         var changes: [PlannedChange] = []
 
         for match in report.matches {
             guard let photo = match.photo else { continue }
-            changes.append(decide(asset: match.asset, photo: photo, mode: mode))
+            changes.append(decide(asset: match.asset, photo: photo))
         }
 
+        // Sorted once, here, rather than every time a view draws the list.
+        // The screen shows a couple of thousand rows and re-renders on every
+        // star click, and a localized sort of that many names is slow enough
+        // to feel. Filtering preserves order, so every subset is sorted too.
+        changes.sort { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+
         return SyncPlan(
-            mode: mode,
             changes: changes,
             unmatchedCount: report.notInPhotos.count,
             ambiguous: report.ambiguous
         )
     }
 
-    static func decide(asset: LRAsset, photo: PhotoAsset, mode: SyncMode) -> PlannedChange {
+    static func decide(asset: LRAsset, photo: PhotoAsset) -> PlannedChange {
         // 0★ in Lightroom means not yet triaged. It never clears a rating.
         guard asset.isRated else {
             return PlannedChange(
@@ -214,47 +191,29 @@ public enum SyncPlanner {
             )
         }
 
-        let photosHasRating = photo.rating > 0
-        let reason: ChangeReason = photosHasRating ? .conflict : .newRating
-
-        switch (mode, photosHasRating) {
-        case (_, false):
-            // Photos has no rating: every mode fills it in.
+        guard photo.rating > 0 else {
+            // Photos has no rating: fill it in.
             return PlannedChange(
                 asset: asset, photo: photo,
-                reason: reason, newRating: asset.rating, needsReview: false
-            )
-        case (.addOnly, true):
-            return PlannedChange(
-                asset: asset, photo: photo,
-                reason: reason, newRating: nil, needsReview: false
-            )
-        case (.lightroomWins, true):
-            return PlannedChange(
-                asset: asset, photo: photo,
-                reason: reason, newRating: asset.rating, needsReview: false
-            )
-        case (.reviewConflicts, true):
-            return PlannedChange(
-                asset: asset, photo: photo,
-                reason: reason, newRating: nil, needsReview: true
+                reason: .newRating, newRating: asset.rating, needsReview: false
             )
         }
+
+        // Both sides rated, and they disagree. The person decides.
+        return PlannedChange(
+            asset: asset, photo: photo,
+            reason: .conflict, newRating: nil, needsReview: true
+        )
     }
 
     /// Checks one planned row against the rating Photos holds right now.
     ///
     /// The plan was built from a snapshot. If that snapshot is still accurate
     /// for this photo the row is written as planned. If Photos has moved on,
-    /// the decision is made again under the mode's own rules — because the
-    /// rule the person picked is a promise about what is in Photos, not about
-    /// what was in Photos when the preview was drawn. "Add only" that
-    /// overwrites a rating added five minutes ago has broken its promise.
-    public static func recheck(
-        _ change: PlannedChange,
-        liveRating: Int,
-        mode: SyncMode
-    ) -> RecheckOutcome {
+    /// the row is left alone and reported — filling in a blank is the only
+    /// thing this code does on its own initiative, and the blank it was going
+    /// to fill is no longer blank.
+    public static func recheck(_ change: PlannedChange, liveRating: Int) -> RecheckOutcome {
         guard let intended = change.newRating else { return .alreadyCorrect }
 
         // Already where it needs to be, whoever put it there.
@@ -267,19 +226,10 @@ public enum SyncPlanner {
         //
         // An explicit choice stands: the person named this rating, and the
         // rating they were comparing against being out of date does not make
-        // their instruction go away.
+        // their instruction go away. The undo log records the live value, so
+        // this stays reversible.
         if change.isManualOverride { return .write(intended) }
 
-        switch mode {
-        case .lightroomWins:
-            // Overwriting a differing rating is the whole point of the mode,
-            // so a newer differing rating changes nothing. The undo log
-            // records the live value, so this stays reversible.
-            return .write(intended)
-        case .addOnly, .reviewConflicts:
-            // Both only fill in blanks on their own. This one is no longer
-            // blank, so it is not theirs to fill.
-            return .changedInPhotos(liveRating: liveRating)
-        }
+        return .changedInPhotos(liveRating: liveRating)
     }
 }

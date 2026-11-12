@@ -49,7 +49,6 @@ enum PhotosWriter {
         var run = SyncRun(
             id: UUID(),
             date: Date(),
-            mode: plan.mode.title,
             catalogName: catalogName,
             entries: pending.map {
                 SyncRun.Entry(
@@ -91,7 +90,7 @@ enum PhotosWriter {
                 }
 
                 let live = asset.rating.rawValue
-                switch SyncPlanner.recheck(change, liveRating: live, mode: plan.mode) {
+                switch SyncPlanner.recheck(change, liveRating: live) {
                 case .alreadyCorrect:
                     continue
                 case .changedInPhotos(let liveRating):
@@ -216,12 +215,6 @@ enum PhotosWriter {
         }
         result.written = restored
         return result
-    }
-}
-
-extension PlannedChange {
-    var displayName: String {
-        photo.originalFilename ?? asset.fileName
     }
 }
 

@@ -13,8 +13,8 @@ This is the first release.
 ## What you can do with it
 
 - **Sync everything, or one album.** Pick the whole catalog or any collection or project. Each one tells you how many of its photos are rated before you commit to anything.
-- **Choose how already-rated photos are treated.** *Add only* fills in blanks and never touches an existing rating. *Lightroom wins* makes Photos match. *Review conflicts* fills in blanks and asks you about each disagreement.
-- **Decide photo by photo.** The review list shows a thumbnail, what Lightroom says, what Photos says, and what's about to happen — and you can change any row before writing, whichever mode you picked.
+- **Fills in blanks, asks about disagreements.** A photo with no rating in Photos gets Lightroom's. Where both sides disagree, StarSync holds it back and asks — one at a time, or all at once.
+- **Decide photo by photo.** The review list shows a thumbnail, what Lightroom says, what Photos says, and what's about to happen — and you can change any row before writing.
 - **Undo a run.** Every sync is recorded before the first rating is written. One button puts them all back.
 
 ## What it won't do to your library

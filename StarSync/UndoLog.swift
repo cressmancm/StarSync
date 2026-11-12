@@ -12,7 +12,6 @@ struct SyncRun: Codable, Identifiable, Sendable {
 
     let id: UUID
     let date: Date
-    let mode: String
     let catalogName: String
     var entries: [Entry]
 

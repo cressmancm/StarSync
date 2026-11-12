@@ -63,7 +63,7 @@ This is the one check that would catch Adobe changing the catalog format in an u
 1. **Rating only.** Never add a write for another property.
 2. **Record before writing.** The undo log is saved before the first change, so an interrupted run is still reversible.
 3. **Preview first.** Nothing writes without the person having seen the plan.
-4. **Zero stars never clears.** Unrated in Lightroom means not yet triaged, so it must not wipe a rating set in Photos. There's a test for this in every mode; keep it passing.
+4. **Zero stars never clears.** Unrated in Lightroom means not yet triaged, so it must not wipe a rating set in Photos. There's a test for this; keep it passing.
 
 Test on a two- or three-photo album before anything larger, and check the Revert button on the way back out.
 

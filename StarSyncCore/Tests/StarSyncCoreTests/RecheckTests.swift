@@ -8,90 +8,71 @@ import Testing
 @Suite("Recheck against live ratings")
 struct RecheckTests {
 
-    func planned(lr: Int, photos: Int, mode: SyncMode) -> PlannedChange {
+    func planned(lr: Int, photos: Int) -> PlannedChange {
         SyncPlanner.decide(
             asset: LRAsset(id: "a", fileName: "DSC_0001.NEF", rating: lr),
             photo: PhotoAsset(id: "p", originalFilename: "DSC_0001.jpg",
-                              creationDate: nil, rating: photos, isEditable: true),
-            mode: mode
+                              creationDate: nil, rating: photos, isEditable: true)
         )
     }
 
     // MARK: Nothing has moved
 
-    @Test("Photos still holds what the preview showed, so the row is written",
-          arguments: SyncMode.allCases)
-    func untouched(mode: SyncMode) {
-        let change = planned(lr: 4, photos: 0, mode: mode)
-        #expect(SyncPlanner.recheck(change, liveRating: 0, mode: mode) == .write(4))
+    @Test("Photos still holds what the preview showed, so the row is written")
+    func untouched() {
+        let change = planned(lr: 4, photos: 0)
+        #expect(SyncPlanner.recheck(change, liveRating: 0) == .write(4))
     }
 
     @Test("A row with nothing to write stays that way")
     func nothingPlanned() {
-        let change = planned(lr: 5, photos: 3, mode: .addOnly)
+        let change = planned(lr: 5, photos: 3)
         #expect(change.newRating == nil)
-        #expect(SyncPlanner.recheck(change, liveRating: 1, mode: .addOnly) == .alreadyCorrect)
+        #expect(SyncPlanner.recheck(change, liveRating: 1) == .alreadyCorrect)
     }
 
-    @Test("Someone else already set the intended rating",
-          arguments: SyncMode.allCases)
-    func alreadyThere(mode: SyncMode) {
-        let change = planned(lr: 4, photos: 0, mode: mode)
-        #expect(SyncPlanner.recheck(change, liveRating: 4, mode: mode) == .alreadyCorrect)
+    @Test("Someone else already set the intended rating")
+    func alreadyThere() {
+        let change = planned(lr: 4, photos: 0)
+        #expect(SyncPlanner.recheck(change, liveRating: 4) == .alreadyCorrect)
     }
 
     // MARK: Photos moved underneath the preview
 
-    @Test("Add only does not overwrite a rating added after the preview")
-    func addOnlyRespectsANewRating() {
-        let change = planned(lr: 4, photos: 0, mode: .addOnly)
+    @Test("A rating added after the preview is not overwritten")
+    func respectsANewRating() {
+        // Planned as a blank to fill. By write time it is not blank any more,
+        // and filling blanks is the only thing done without being asked.
+        let change = planned(lr: 4, photos: 0)
         #expect(change.willWrite)
-        #expect(SyncPlanner.recheck(change, liveRating: 3, mode: .addOnly)
-                == .changedInPhotos(liveRating: 3))
+        #expect(SyncPlanner.recheck(change, liveRating: 3) == .changedInPhotos(liveRating: 3))
     }
 
-    @Test("Review conflicts does not overwrite a rating added after the preview")
-    func reviewConflictsRespectsANewRating() {
-        let change = planned(lr: 4, photos: 0, mode: .reviewConflicts)
-        #expect(SyncPlanner.recheck(change, liveRating: 2, mode: .reviewConflicts)
-                == .changedInPhotos(liveRating: 2))
-    }
-
-    @Test("Lightroom wins still wins: a newer differing rating is still differing")
-    func lightroomWinsIgnoresTheChange() {
-        let change = planned(lr: 4, photos: 2, mode: .lightroomWins)
-        #expect(SyncPlanner.recheck(change, liveRating: 1, mode: .lightroomWins) == .write(4))
-    }
-
-    @Test("An explicit choice is honoured even though Photos moved",
-          arguments: SyncMode.allCases)
-    func overrideStands(mode: SyncMode) {
+    @Test("An explicit choice is honoured even though Photos moved")
+    func overrideStands() {
         var plan = SyncPlan(
-            mode: mode,
-            changes: [planned(lr: 4, photos: 0, mode: mode)],
+            changes: [planned(lr: 4, photos: 0)],
             unmatchedCount: 0,
             ambiguous: []
         )
         plan.setRating(5, for: "a")
         let change = plan.changes[0]
         #expect(change.isManualOverride)
-        #expect(SyncPlanner.recheck(change, liveRating: 3, mode: mode) == .write(5))
+        #expect(SyncPlanner.recheck(change, liveRating: 3) == .write(5))
     }
 
     // MARK: Where the override flag comes from
 
-    @Test("The planner does not mark its own decisions as the person's",
-          arguments: SyncMode.allCases)
-    func plannerDecisionsAreNotOverrides(mode: SyncMode) {
-        #expect(!planned(lr: 4, photos: 0, mode: mode).isManualOverride)
-        #expect(!planned(lr: 4, photos: 2, mode: mode).isManualOverride)
+    @Test("The planner does not mark its own decisions as the person's")
+    func plannerDecisionsAreNotOverrides() {
+        #expect(!planned(lr: 4, photos: 0).isManualOverride)
+        #expect(!planned(lr: 4, photos: 2).isManualOverride)
     }
 
     @Test("Resolving the review list in bulk counts as the person deciding")
     func bulkResolutionIsAnOverride() {
         var plan = SyncPlan(
-            mode: .reviewConflicts,
-            changes: [planned(lr: 5, photos: 2, mode: .reviewConflicts)],
+            changes: [planned(lr: 5, photos: 2)],
             unmatchedCount: 0,
             ambiguous: []
         )
@@ -100,15 +81,14 @@ struct RecheckTests {
         #expect(plan.changes[0].isManualOverride)
         #expect(plan.manualOverrides.count == 1)
         // And it survives Photos moving, because it was asked for.
-        #expect(SyncPlanner.recheck(plan.changes[0], liveRating: 1, mode: .reviewConflicts)
+        #expect(SyncPlanner.recheck(plan.changes[0], liveRating: 1)
                 == .write(5))
     }
 
     @Test("Keeping Photos' rating in bulk writes nothing")
     func keepingFromPhotosWritesNothing() {
         var plan = SyncPlan(
-            mode: .reviewConflicts,
-            changes: [planned(lr: 5, photos: 2, mode: .reviewConflicts)],
+            changes: [planned(lr: 5, photos: 2)],
             unmatchedCount: 0,
             ambiguous: []
         )
@@ -175,10 +155,10 @@ struct ReportRefreshTests {
         // The snapshot said unrated, so Add only intended to write. Photos has
         // since been rated 3, so there is nothing for Add only to do.
         let stale = report(photoRating: 0)
-        #expect(SyncPlanner.plan(from: stale, mode: .addOnly).writes.count == 1)
+        #expect(SyncPlanner.plan(from: stale).writes.count == 1)
 
         let fresh = stale.updatingPhotoRatings(["p": 3])
-        let plan = SyncPlanner.plan(from: fresh, mode: .addOnly)
+        let plan = SyncPlanner.plan(from: fresh)
         #expect(plan.writes.isEmpty)
         #expect(plan.conflicts.count == 1)
     }

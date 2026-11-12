@@ -12,7 +12,6 @@ struct ContentView: View {
             Group {
                 switch controller.step {
                 case .source: SourceStepView(controller: controller)
-                case .mode: ModeStepView(controller: controller)
                 case .preview: PreviewStepView(controller: controller)
                 case .apply: ApplyStepView(controller: controller)
                 }
@@ -64,6 +63,17 @@ struct ContentView: View {
 
             Spacer()
 
+            // Rows still waiting on a decision are skipped, not blocked. Say
+            // so here rather than letting them disappear quietly.
+            if controller.step == .preview,
+               let pending = controller.plan?.pendingReview.count, pending > 0 {
+                Text("\(pending.formatted()) left undecided will be skipped")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .help("Rows still waiting on you are not written. You can sync again to decide them.")
+            }
+
             if controller.step != .source {
                 Button("Back") { goBack() }
                     .disabled(controller.isWorking)
@@ -80,7 +90,7 @@ struct ContentView: View {
 
     private var primaryTitle: String {
         switch controller.step {
-        case .source, .mode: return "Continue"
+        case .source: return "Continue"
         case .preview:
             let count = controller.plan?.writes.count ?? 0
             return count == 0 ? "Nothing to write" : "Write \(count.formatted()) rating\(count == 1 ? "" : "s")"
@@ -91,8 +101,11 @@ struct ContentView: View {
     private var canGoForward: Bool {
         guard !controller.isWorking else { return false }
         switch controller.step {
-        case .source: return controller.catalog != nil && controller.photos != nil
-        case .mode: return !controller.scopedAssets.isEmpty
+        // The scope check used to gate the mode step. With that step gone it
+        // belongs here: an album with nothing in it has nothing to plan.
+        case .source:
+            return controller.catalog != nil && controller.photos != nil
+                && !controller.scopedAssets.isEmpty
         case .preview: return (controller.plan?.writes.count ?? 0) > 0
         case .apply: return true
         }
@@ -101,23 +114,23 @@ struct ContentView: View {
     private func goBack() {
         switch controller.step {
         case .source: break
-        case .mode: controller.step = .source
-        case .preview: controller.step = .mode
+        case .preview: controller.step = .source
         case .apply: controller.step = .preview
         }
     }
 
     private func goForward() async {
         switch controller.step {
-        case .source: controller.step = .mode
-        case .mode: await controller.buildPlan()
+        // buildPlan sets the step itself on success, so a failure leaves you
+        // here rather than on an empty Review screen.
+        case .source: await controller.buildPlan()
         case .preview: await controller.apply()
         case .apply: controller.reset()
         }
     }
 }
 
-/// The four steps, with the current one marked.
+/// The three steps, with the current one marked.
 private struct StepBar: View {
     let current: SyncController.Step
 
