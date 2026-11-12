@@ -73,13 +73,16 @@ public struct LRCatalog: Sendable {
     public let assets: [LRAsset]
     public let albums: [LRAlbum]
 
+    /// Assets keyed by `fullDocId`, for resolving album membership.
+    ///
+    /// Stored rather than computed: a view that reads this once per album row
+    /// was rebuilding a four-thousand-entry dictionary per row, per render.
+    public let assetsByID: [String: LRAsset]
+
     public init(assets: [LRAsset], albums: [LRAlbum]) {
         self.assets = assets
         self.albums = albums
-    }
-
-    public var assetsByID: [String: LRAsset] {
-        Dictionary(assets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        self.assetsByID = Dictionary(assets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     }
 
     /// Count of assets at each rating 0–5.

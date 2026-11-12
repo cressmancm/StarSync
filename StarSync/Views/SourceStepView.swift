@@ -5,6 +5,19 @@ import SwiftUI
 struct SourceStepView: View {
     @Bindable var controller: SyncController
     @State private var search = ""
+    @State private var sort: AlbumSort = .name
+    @State private var showsAlbumsWithNothingToSync = false
+
+    enum AlbumSort: String, CaseIterable, Identifiable {
+        case name, mostRated
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .name: return "Name"
+            case .mostRated: return "Most rated"
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -63,9 +76,17 @@ struct SourceStepView: View {
 
     private var scopeSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 10) {
                 Text("Which photos?").font(.headline)
                 Spacer()
+                Picker("Sort", selection: $sort) {
+                    ForEach(AlbumSort.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
                 TextField("Search albums", text: $search)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 180)
@@ -78,9 +99,10 @@ struct SourceStepView: View {
                 set: { if let new = $0 { controller.scope = new } }
             )) {
                 wholeCatalogRow
-                if !filteredAlbums.isEmpty {
+                    .tag(SyncController.Scope.wholeCatalog)
+                if !visibleAlbums.isEmpty {
                     Section("Albums") {
-                        ForEach(filteredAlbums) { album in
+                        ForEach(visibleAlbums) { album in
                             albumRow(album)
                                 .tag(SyncController.Scope.album(id: album.id))
                         }
@@ -88,6 +110,23 @@ struct SourceStepView: View {
                 }
             }
             .listStyle(.inset)
+
+            if hiddenCount > 0 {
+                Divider()
+                HStack(spacing: 8) {
+                    Text("\(hiddenCount.formatted()) album\(hiddenCount == 1 ? "" : "s") with no rated photos hidden")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Spacer()
+                    Button(showsAlbumsWithNothingToSync ? "Hide" : "Show") {
+                        showsAlbumsWithNothingToSync.toggle()
+                    }
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
+            }
         }
     }
 
@@ -96,36 +135,62 @@ struct SourceStepView: View {
             Label("Entire catalog", systemImage: "square.stack.3d.up")
             Spacer()
             if let catalog = controller.catalog {
-                Text("\(catalog.ratedCount.formatted()) rated")
+                Text("\(catalog.ratedCount.formatted()) of \(catalog.assets.count.formatted()) rated")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
-        .tag(SyncController.Scope.wholeCatalog)
     }
 
-    private func albumRow(_ album: LRAlbum) -> some View {
-        let byID = controller.catalog?.assetsByID ?? [:]
-        let assets = album.assetIDs.compactMap { byID[$0] }
-        let rated = assets.count(where: \.isRated)
-        return HStack {
+    private func albumRow(_ album: SyncController.AlbumRow) -> some View {
+        HStack {
             Label {
                 Text(album.name)
             } icon: {
-                Image(systemName: album.kind == .project ? "rectangle.stack" : "folder")
+                Image(systemName: album.isProject ? "rectangle.stack" : "folder")
             }
             Spacer()
-            Text("\(rated.formatted()) of \(assets.count.formatted()) rated")
+            Text("\(album.ratedCount.formatted()) of \(album.photoCount.formatted()) rated")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(album.hasNothingToSync ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                 .monospacedDigit()
         }
     }
 
-    private var filteredAlbums: [LRAlbum] {
-        let albums = controller.albums
-        guard !search.isEmpty else { return albums }
-        return albums.filter { $0.name.localizedCaseInsensitiveContains(search) }
+    /// Albums after the search, the nothing-to-sync filter and the sort.
+    ///
+    /// Half of a real catalog's albums have no rated photos in them, and they
+    /// tend to be the biggest — untriaged imports. Showing them by default
+    /// buries the ones worth picking.
+    private var visibleAlbums: [SyncController.AlbumRow] {
+        var rows = controller.albumRows
+        if !search.isEmpty {
+            rows = rows.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        }
+        if !showsAlbumsWithNothingToSync {
+            rows = rows.filter { !$0.hasNothingToSync }
+        }
+        switch sort {
+        case .name:
+            rows.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .mostRated:
+            rows.sort {
+                $0.ratedCount != $1.ratedCount
+                    ? $0.ratedCount > $1.ratedCount
+                    : $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        }
+        return rows
+    }
+
+    /// How many the search would have matched but the filter is holding back.
+    private var hiddenCount: Int {
+        guard !showsAlbumsWithNothingToSync else { return 0 }
+        let matching = search.isEmpty
+            ? controller.albumRows
+            : controller.albumRows.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        return matching.count(where: \.hasNothingToSync)
     }
 
     // MARK: Actions
