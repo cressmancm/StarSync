@@ -16,7 +16,7 @@ The sources sit in `icon/` rather than `StarSync/` because that folder is a sync
 
 ## Blocked on Chip
 
-**Screenshots — nothing captured.** This process has no Screen Recording permission (`screencapture` returns "could not create image from display"), and that is granted in System Settings → Privacy & Security → Screen Recording. `docs/screenshots/README.md` is the shot list: which steps, which appearances, what should be on screen in each.
+**Screenshots — nothing captured.** Screen Recording was granted later the same day and capture works, but the Mac was locked, so every frame is the login window. Driving the app through its four steps also needs Accessibility, which is not granted — `osascript` gets "not allowed assistive access". `docs/screenshots/README.md` is the shot list: which steps, which appearances, what should be on screen in each, and what is still needed to take them.
 
 There's a second question underneath the permission. The shots show real photographs from the library as thumbnails, the repo is public, and they'd also go on chipcressman.com/starsync. That's a decision to make deliberately, not one to assume.
 

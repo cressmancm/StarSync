@@ -2,7 +2,10 @@
 
 **None have been taken yet.** This file is the shot list, so whoever takes them gets a consistent set.
 
-A session working on this on 2026-11-12 could not capture them: the process had no Screen Recording permission, and macOS gives that out in System Settings → Privacy & Security → Screen Recording, which needs Chip.
+Screen Recording was the first thing in the way; Chip granted it on 2026-11-12 and capture works now. Two things are left:
+
+1. **Nobody is at the Mac.** A capture of a locked Mac is the login window, not the app. Only Chip can unlock it.
+2. **No Accessibility permission.** Taking this set means driving the app through all four steps, and clicking from a script needs System Settings → Privacy & Security → Accessibility. Without it `osascript` gets *"not allowed assistive access"*, so the app can be launched but not used. Granting it hands any script on this Mac the ability to click and type anywhere, which is a bigger thing to hand over than screen capture was — Chip taking the five shots himself is both faster and less to give away.
 
 ## What's needed
 
