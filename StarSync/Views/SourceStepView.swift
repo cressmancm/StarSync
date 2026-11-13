@@ -5,17 +5,34 @@ import SwiftUI
 struct SourceStepView: View {
     @Bindable var controller: SyncController
     @State private var search = ""
-    @State private var sort: AlbumSort = .name
     @State private var showsAlbumsWithNothingToSync = false
+    /// Name, A to Z.
+    ///
+    /// Do not add `order: .forward` here, however explicit it looks: passing
+    /// it sorted the table backwards and left the header's arrow on the wrong
+    /// column. Leaving it off is what actually gives a forward sort matched to
+    /// the Album column.
+    @State private var sortOrder = [
+        KeyPathComparator(\ScopeRow.name, comparator: .localizedStandard)
+    ]
 
-    enum AlbumSort: String, CaseIterable, Identifiable {
-        case name, mostRated
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .name: return "Name"
-            case .mostRated: return "Most rated"
-            }
+    /// One pickable thing: the whole catalog, or one album.
+    ///
+    /// Both live in the same table so the catalog can sit in it as a row
+    /// rather than floating above it, and `id` is the scope itself so the
+    /// table's selection is the controller's scope with nothing in between.
+    struct ScopeRow: Identifiable {
+        let id: SyncController.Scope
+        let name: String
+        let symbol: String
+        let photoCount: Int
+        let ratedCount: Int
+        /// The catalog row keeps its place at the top whatever the sort is.
+        let isPinned: Bool
+
+        var hasNothingToSync: Bool { ratedCount == 0 }
+        var ratedSummary: String {
+            "\(ratedCount.formatted()) of \(photoCount.formatted()) rated"
         }
     }
 
@@ -79,14 +96,6 @@ struct SourceStepView: View {
             HStack(spacing: 10) {
                 Text("Which photos?").font(.headline)
                 Spacer()
-                Picker("Sort", selection: $sort) {
-                    ForEach(AlbumSort.allCases) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
                 TextField("Search albums", text: $search)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 180)
@@ -94,27 +103,31 @@ struct SourceStepView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            List(selection: Binding(
+            Table(rows, selection: Binding(
                 get: { controller.scope },
                 set: { if let new = $0 { controller.scope = new } }
-            )) {
-                wholeCatalogRow
-                    .tag(SyncController.Scope.wholeCatalog)
-                if !visibleAlbums.isEmpty {
-                    Section("Albums") {
-                        ForEach(visibleAlbums) { album in
-                            albumRow(album)
-                                .tag(SyncController.Scope.album(id: album.id))
-                        }
-                    }
+            ), sortOrder: $sortOrder) {
+                TableColumn("Album", value: \.name, comparator: .localizedStandard) { row in
+                    Label(row.name, systemImage: row.symbol)
+                        .labelStyle(.titleAndIcon)
                 }
+                .width(min: 200, ideal: 380, max: 460)
+                // Left-aligned and narrow, so the heading sits over its own
+                // numbers instead of across a gap from them.
+                TableColumn("Rated", value: \.ratedCount) { row in
+                    Text(row.ratedSummary)
+                        .foregroundStyle(row.hasNothingToSync
+                                         ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .width(min: 110, ideal: 150, max: 190)
             }
-            .listStyle(.inset)
 
-            if hiddenCount > 0 {
+            if nothingToSyncCount > 0 {
                 Divider()
                 HStack(spacing: 8) {
-                    Text("\(hiddenCount.formatted()) album\(hiddenCount == 1 ? "" : "s") with no rated photos hidden")
+                    Text(nothingToSyncSummary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -130,67 +143,63 @@ struct SourceStepView: View {
         }
     }
 
-    private var wholeCatalogRow: some View {
-        HStack {
-            Label("Entire catalog", systemImage: "square.stack.3d.up")
-            Spacer()
-            if let catalog = controller.catalog {
-                Text("\(catalog.ratedCount.formatted()) of \(catalog.assets.count.formatted()) rated")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-        }
-    }
-
-    private func albumRow(_ album: SyncController.AlbumRow) -> some View {
-        HStack {
-            Label {
-                Text(album.name)
-            } icon: {
-                Image(systemName: album.isProject ? "rectangle.stack" : "folder")
-            }
-            Spacer()
-            Text("\(album.ratedCount.formatted()) of \(album.photoCount.formatted()) rated")
-                .font(.caption)
-                .foregroundStyle(album.hasNothingToSync ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                .monospacedDigit()
-        }
-    }
-
-    /// Albums after the search, the nothing-to-sync filter and the sort.
+    /// The table's contents: the catalog first, then the albums the search
+    /// and the nothing-to-sync filter leave, in whatever order the column
+    /// headers ask for.
     ///
     /// Half of a real catalog's albums have no rated photos in them, and they
     /// tend to be the biggest — untriaged imports. Showing them by default
     /// buries the ones worth picking.
-    private var visibleAlbums: [SyncController.AlbumRow] {
-        var rows = controller.albumRows
+    private var rows: [ScopeRow] {
+        guard let catalog = controller.catalog else { return [] }
+
+        var albums = controller.albumRows
         if !search.isEmpty {
-            rows = rows.filter { $0.name.localizedCaseInsensitiveContains(search) }
+            albums = albums.filter { $0.name.localizedCaseInsensitiveContains(search) }
         }
         if !showsAlbumsWithNothingToSync {
-            rows = rows.filter { !$0.hasNothingToSync }
+            albums = albums.filter { !$0.hasNothingToSync }
         }
-        switch sort {
-        case .name:
-            rows.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        case .mostRated:
-            rows.sort {
-                $0.ratedCount != $1.ratedCount
-                    ? $0.ratedCount > $1.ratedCount
-                    : $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
+
+        let sorted = albums.map { album in
+            ScopeRow(
+                id: .album(id: album.id),
+                name: album.name,
+                symbol: album.isProject ? "rectangle.stack" : "folder",
+                photoCount: album.photoCount,
+                ratedCount: album.ratedCount,
+                isPinned: false
+            )
         }
-        return rows
+        .sorted(using: sortOrder)
+
+        // Prepended after sorting, so "everything" stays reachable at the top
+        // however the table is ordered.
+        let wholeCatalog = ScopeRow(
+            id: .wholeCatalog,
+            name: "Entire catalog",
+            symbol: "square.stack.3d.up",
+            photoCount: catalog.assets.count,
+            ratedCount: catalog.ratedCount,
+            isPinned: true
+        )
+        return [wholeCatalog] + sorted
     }
 
-    /// How many the search would have matched but the filter is holding back.
-    private var hiddenCount: Int {
-        guard !showsAlbumsWithNothingToSync else { return 0 }
+    /// How many albums the search matches that have nothing to sync.
+    ///
+    /// Counted whether or not they are currently shown: the footer is the only
+    /// way back to hiding them, so it has to stay on screen once they are out.
+    private var nothingToSyncCount: Int {
         let matching = search.isEmpty
             ? controller.albumRows
             : controller.albumRows.filter { $0.name.localizedCaseInsensitiveContains(search) }
         return matching.count(where: \.hasNothingToSync)
+    }
+
+    private var nothingToSyncSummary: String {
+        let albums = "\(nothingToSyncCount.formatted()) album\(nothingToSyncCount == 1 ? "" : "s") with no rated photos"
+        return showsAlbumsWithNothingToSync ? "Showing \(albums)" : "\(albums) hidden"
     }
 
     // MARK: Actions
