@@ -3,7 +3,7 @@ import Observation
 import Photos
 import StarSyncCore
 
-/// Drives the four steps of a sync and holds everything the views display.
+/// Drives the three steps of a sync and holds everything the views display.
 @MainActor
 @Observable
 final class SyncController {
