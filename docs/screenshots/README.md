@@ -2,24 +2,9 @@
 
 **None have been taken yet.** This file is the shot list, so whoever takes them gets a consistent set.
 
-Permissions are no longer the problem. Chip granted Screen Recording and Accessibility on 2026-11-12, so a session can both capture the screen and drive the app. Two things are left, and both need him:
+Everything that was blocking these is cleared. Screen Recording and Accessibility were granted on 2026-11-12, and **StarSync Demo** now exists as an ordinary Lightroom album with 14 rated photos. Shoot that album and nothing else: those photos are cleared for the public repo and for chipcressman.com/starsync, and no other album's are.
 
-1. **Nobody is signed in.** A capture of a locked Mac is the login window, not the app. Only Chip can unlock it.
-2. **The demo album needs to be an ordinary album, not a smart one.** See below.
-
-### Why a smart album won't do
-
-Chip made a Lightroom album called **StarSync Demo** on 2026-11-12 to supply safe, publishable photos for these shots. It was created as a *smart* album, and StarSync cannot read it. From the catalog directly:
-
-- `fullDocId 9b0d6e3911604196948b40ca9b2d1c54`, subtype **`smart`** — the only smart album in the catalog.
-- Its membership is a stored **predicate on `rating`**, not a list of photos.
-- It has **zero** `album_asset` rows. The membership is computed by Lightroom and exists nowhere in the catalog file.
-
-StarSync builds album membership from `album_asset`, and the chooser offers only `collection` albums. So a smart album never appears in the picker, and would read as 0 photos if it did.
-
-**The fix is on Chip's side:** select the photos and make a plain New Album rather than a New Smart Album. Any name will do.
-
-This is also worth knowing about the app itself, separately from the screenshots: anyone who organises Lightroom with smart albums will find them missing from StarSync's list with nothing on screen to say why. Either list them or say they aren't supported — a decision for after 1.0, not a release blocker.
+Smart albums are not listed in the chooser, deliberately — their membership is a stored predicate with no `album_asset` rows, so there is nothing to read — so don't expect one in a shot.
 
 ## What's needed
 

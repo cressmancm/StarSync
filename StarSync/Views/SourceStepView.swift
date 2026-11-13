@@ -31,9 +31,11 @@ struct SourceStepView: View {
         let isPinned: Bool
 
         var hasNothingToSync: Bool { ratedCount == 0 }
-        var ratedSummary: String {
-            "\(ratedCount.formatted()) of \(photoCount.formatted()) rated"
-        }
+        var ratedSummary: String { SourceStepView.ratedSummary(ratedCount, of: photoCount) }
+    }
+
+    static func ratedSummary(_ rated: Int, of total: Int) -> String {
+        "\(rated.formatted()) of \(total.formatted()) rated"
     }
 
     var body: some View {
@@ -121,9 +123,7 @@ struct SourceStepView: View {
                         .monospacedDigit()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                // Fixed, and just wide enough for the longest value this can
-                // hold — "614 of 4,174 rated" on a catalog this size.
-                .width(160)
+                .width(ratedColumnWidth)
             }
 
             if nothingToSyncCount > 0 {
@@ -186,6 +186,40 @@ struct SourceStepView: View {
             isPinned: true
         )
         return [wholeCatalog] + sorted
+    }
+
+    /// Space a table cell is inset by, and the room the header's sort arrow
+    /// needs beside its title. SwiftUI publishes neither, so both are read
+    /// off the rendered table.
+    private static let cellInsets: CGFloat = 20
+    private static let sortArrowWidth: CGFloat = 18
+
+    /// Wide enough for the longest value the column can hold, measured in the
+    /// font it is drawn in.
+    ///
+    /// `TableColumn` only takes a number — the macOS 27 SDK offers
+    /// `width(_:)` and `width(min:ideal:max:)` and nothing that sizes a
+    /// column to its contents — so the measuring is done here.
+    ///
+    /// Measured across every album rather than the ones currently listed, so
+    /// the column keeps still while you type in the search field or toggle
+    /// the hidden albums. The digits are monospaced and every value shares
+    /// the same " of " and " rated", so the longest string is reliably the
+    /// widest one and only it needs measuring.
+    private var ratedColumnWidth: CGFloat {
+        guard let catalog = controller.catalog else { return 0 }
+
+        var candidates = controller.albumRows.map { Self.ratedSummary($0.ratedCount, of: $0.photoCount) }
+        candidates.append(Self.ratedSummary(catalog.ratedCount, of: catalog.assets.count))
+        guard let longest = candidates.max(by: { $0.count < $1.count }) else { return 0 }
+
+        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let value = (longest as NSString).size(withAttributes: [.font: font]).width
+        let header = ("Rated" as NSString).size(withAttributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        ]).width
+
+        return ceil(max(value, header + Self.sortArrowWidth)) + Self.cellInsets
     }
 
     /// How many albums the search matches that have nothing to sync.
