@@ -21,7 +21,7 @@ cd StarSyncCore
 swift test
 ```
 
-That's 80 tests against a committed fixture, in well under a second. No photo library involved and no permission prompts.
+That's 76 tests against a committed fixture, in well under a second. No photo library involved and no permission prompts.
 
 To regenerate the fixture after changing what it needs to cover:
 
