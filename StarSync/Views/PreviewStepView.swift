@@ -10,8 +10,12 @@ struct PreviewStepView: View {
     ///
     /// Deliberately not called `Section` or `Group`: both shadow SwiftUI types
     /// used a few lines below, and the diagnostics are baffling.
+    /// Order matters: the two short sections come first so that every header
+    /// is on screen when the step opens. "Will write" is the long one — it can
+    /// run to hundreds of rows — so anything below it would need scrolling
+    /// past all of them to find, which is no better than not being there.
     private enum RowGroup: String, CaseIterable, Identifiable {
-        case needsDecision, willWrite, leavingAlone
+        case needsDecision, leavingAlone, willWrite
         var id: String { rawValue }
 
         var title: String {
