@@ -111,17 +111,19 @@ struct SourceStepView: View {
                     Label(row.name, systemImage: row.symbol)
                         .labelStyle(.titleAndIcon)
                 }
-                .width(min: 200, ideal: 380, max: 460)
-                // Left-aligned and narrow, so the heading sits over its own
-                // numbers instead of across a gap from them.
+                // No maximum: this column takes whatever width is left once
+                // Rated has what it needs, so the two of them fill the table.
+                .width(min: 200, ideal: 400)
                 TableColumn("Rated", value: \.ratedCount) { row in
                     Text(row.ratedSummary)
                         .foregroundStyle(row.hasNothingToSync
                                          ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                         .monospacedDigit()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .width(min: 110, ideal: 150, max: 190)
+                // Fixed, and just wide enough for the longest value this can
+                // hold — "614 of 4,174 rated" on a catalog this size.
+                .width(160)
             }
 
             if nothingToSyncCount > 0 {
