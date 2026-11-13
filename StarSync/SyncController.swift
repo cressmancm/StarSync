@@ -79,9 +79,13 @@ final class SyncController {
     }
 
     var albums: [LRAlbum] {
-        // Collections and projects hold photos; a collection set is only a
-        // folder, so it would always come up empty.
-        (catalog?.albums ?? []).filter { $0.kind == .collection || $0.kind == .project }
+        // Collections are the albums a person makes in Lightroom. The other
+        // kinds are not: a `project` is an Adobe Portfolio gallery, which
+        // syncs into the same catalog but is not something anyone thinks of
+        // as a Lightroom album — and it duplicates the collection it was
+        // published from. A `collection_set` is only a folder of collections,
+        // so it holds no photos of its own.
+        (catalog?.albums ?? []).filter { $0.kind == .collection }
     }
 
     /// One album as the chooser needs it, with its counts already worked out.
@@ -91,7 +95,6 @@ final class SyncController {
     struct AlbumRow: Identifiable, Hashable {
         let id: String
         let name: String
-        let isProject: Bool
         let photoCount: Int
         let ratedCount: Int
 
@@ -107,7 +110,6 @@ final class SyncController {
             return AlbumRow(
                 id: album.id,
                 name: album.name,
-                isProject: album.kind == .project,
                 photoCount: assets.count,
                 ratedCount: assets.count(where: \.isRated)
             )

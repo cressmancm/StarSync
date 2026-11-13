@@ -17,7 +17,7 @@ Built with [Claude Code](https://claude.com/claude-code). More of my work at [ch
 ## What it does
 
 - **Reads your Lightroom catalog directly.** No exporting a sidecar, no plugin to install in Lightroom. Point it at your `.lrlibrary` and it reads the ratings out.
-- **Syncs everything or just one album.** Pick the whole catalog or any one of your collections and projects. Each one shows how many of its photos are rated before you commit to anything.
+- **Syncs everything or just one album.** Pick the whole catalog or any one of your albums. Each one shows how many of its photos are rated before you commit to anything.
 - **Fills in the blanks, and asks about the rest.** A photo with no rating in Photos gets the one from Lightroom. Where both sides have a rating and they disagree, StarSync doesn't guess — it holds the photo back and asks.
 - **Lets you decide photo by photo, or all at once.** The review list shows a thumbnail, what Lightroom says, what Photos says, and what's about to happen. Change any row before you write, or settle every disagreement in one click — take them all from Lightroom, or keep them all from Photos. Five stars against four is not a decision you should have to make from a filename.
 - **Shows you the albums worth syncing.** Albums with nothing rated in them are tucked away, since they can only ever produce an empty run. One click brings them back.

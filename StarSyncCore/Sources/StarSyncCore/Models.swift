@@ -43,7 +43,12 @@ public struct LRAsset: Sendable, Identifiable, Equatable {
     public var isRated: Bool { rating > 0 }
 }
 
-/// An album, collection or project in the Lightroom catalog.
+/// One `album` record in the Lightroom catalog.
+///
+/// `collection` is an album someone made in Lightroom. `project` is an Adobe
+/// Portfolio gallery, `collection_set` a folder of collections, and `smart` —
+/// which maps to `other` — an album defined by a predicate, whose membership
+/// is computed and so appears nowhere in `album_asset`.
 public struct LRAlbum: Sendable, Identifiable, Equatable {
     public enum Kind: String, Sendable {
         case collection

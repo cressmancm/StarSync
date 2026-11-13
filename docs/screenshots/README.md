@@ -15,7 +15,7 @@ Chip made a Lightroom album called **StarSync Demo** on 2026-11-12 to supply saf
 - Its membership is a stored **predicate on `rating`**, not a list of photos.
 - It has **zero** `album_asset` rows. The membership is computed by Lightroom and exists nowhere in the catalog file.
 
-StarSync builds album membership from `album_asset`, and `SyncController.swift:86` offers only `.collection` and `.project` albums. So a smart album never appears in the picker, and would read as 0 photos if it did.
+StarSync builds album membership from `album_asset`, and the chooser offers only `collection` albums. So a smart album never appears in the picker, and would read as 0 photos if it did.
 
 **The fix is on Chip's side:** select the photos and make a plain New Album rather than a New Smart Album. Any name will do.
 

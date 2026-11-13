@@ -165,7 +165,7 @@ struct SourceStepView: View {
             ScopeRow(
                 id: .album(id: album.id),
                 name: album.name,
-                symbol: album.isProject ? "rectangle.stack" : "folder",
+                symbol: "folder",
                 photoCount: album.photoCount,
                 ratedCount: album.ratedCount,
                 isPinned: false
