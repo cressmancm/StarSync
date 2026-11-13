@@ -1,0 +1,14 @@
+// Copy this to Signing.local.xcconfig, which git ignores, and put in your own
+// team ID. It's on the Membership details page of your Apple Developer
+// account, and `security find-identity -v -p codesigning` prints it in
+// brackets after each certificate's name.
+//
+// Xcode manages the certificate and the provisioning profile from here. The
+// certificate outlives your builds, so macOS only asks for your photo library
+// once instead of at every launch.
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CODE_SIGN_IDENTITY = Apple Development
+
+// Without an Apple Developer account, skip all this: the defaults in
+// Signing.xcconfig build and run fine. The app just asks for your photo
+// library again each time you launch it.

@@ -1,0 +1,17 @@
+// Code signing for builds from the Xcode project, set up the way Xcode sets up
+// a new Mac app: automatic signing, and signing to run locally until there's a
+// team.
+//
+// Signing to run locally gives the app a different identity on every build, and
+// macOS keys the Photos permission to that identity — which is why an ad-hoc
+// build asks to use your photo library again at every single launch. A real
+// certificate keeps the identity the same between builds, so you grant it once.
+//
+// Leave this file as it is. To sign with your own team, copy
+// Signing.local.xcconfig.example to Signing.local.xcconfig, which git ignores,
+// and fill it in. See CONTRIBUTING.md.
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY = -
+
+#include? "Signing.local.xcconfig"

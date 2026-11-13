@@ -15,7 +15,7 @@ Releases are a signed, notarized `.dmg` attached to a GitHub release. Only the m
 
   Your team ID is on the [Membership page](https://developer.apple.com/account) of your Apple Developer account, and `security find-identity -v -p codesigning` prints it alongside the certificate names you can sign with.
 
-- **Signing** is automatic, with the team set on the StarSync target. For the release build, Xcode picks the Developer ID certificate when you export for Developer ID distribution.
+- **Signing** is automatic, with the team set in `Signing.local.xcconfig` — copy it from `Signing.local.xcconfig.example`; git ignores it, so no team ID is in the repository. For the release build, Xcode picks the Developer ID certificate when you export for Developer ID distribution.
 
 ## Each release
 

@@ -6,7 +6,9 @@
 open StarSync.xcodeproj
 ```
 
-Xcode 27 or later, macOS 27 or later. Set your own team under Signing & Capabilities, then Run.
+Xcode 27 or later, macOS 27 or later. It builds and runs as it comes.
+
+To sign it with your own team, copy `Signing.local.xcconfig.example` to `Signing.local.xcconfig` — git ignores it — and put in your team ID. Worth doing: without a certificate each build gets a new identity, and macOS keys the Photos permission to that identity, so the app asks to use your photo library at every single launch. With one, you grant it once.
 
 The app is sandboxed, so it has no standing access to `~/Pictures`. You grant it by choosing your `.lrlibrary` in the open panel; a security-scoped bookmark keeps that across launches.
 

@@ -20,3 +20,6 @@ Package.resolved
 
 # Releases
 *.dmg
+
+# Each developer's own signing settings
+Signing.local.xcconfig

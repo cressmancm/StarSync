@@ -32,6 +32,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5A0000000000000000000041 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		5A0000000000000000000040 /* StarSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StarSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -50,6 +51,7 @@
 		5A0000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				5A0000000000000000000041 /* Signing.xcconfig */,
 				5A0000000000000000000010 /* StarSync */,
 				5A0000000000000000000002 /* Products */,
 			);
@@ -149,6 +151,7 @@
 /* Begin XCBuildConfiguration section */
 		5A0000000000000000000070 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A0000000000000000000041 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -183,6 +186,7 @@
 		};
 		5A0000000000000000000071 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A0000000000000000000041 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -209,9 +213,9 @@
 		};
 		5A0000000000000000000072 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A0000000000000000000041 /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = StarSync/StarSync.entitlements;
-				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
@@ -236,9 +240,9 @@
 		};
 		5A0000000000000000000073 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A0000000000000000000041 /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = StarSync/StarSync.entitlements;
-				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
