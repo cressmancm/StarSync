@@ -171,6 +171,24 @@ struct SyncPlanTests {
         #expect(plan.summary.contains("1 ambiguous"))
     }
 
+    @Test("One conflict is a conflict, not conflicts")
+    func summaryPluralisesConflicts() {
+        func plan(conflicts: Int) -> SyncPlan {
+            let matches = (0..<conflicts).map { i in
+                Match(
+                    asset: LRAsset(id: "a\(i)", fileName: "a\(i).NEF", rating: 5),
+                    outcome: .matched(PhotoAsset(id: "p\(i)", originalFilename: "a\(i).jpg",
+                                                 creationDate: nil, rating: 3),
+                                      confidence: .uniqueFilename)
+                )
+            }
+            return SyncPlanner.plan(from: MatchReport(matches: matches, unidentifiablePhotos: 0))
+        }
+        #expect(plan(conflicts: 1).summary.contains("1 conflict"))
+        #expect(!plan(conflicts: 1).summary.contains("1 conflicts"))
+        #expect(plan(conflicts: 2).summary.contains("2 conflicts"))
+    }
+
     // MARK: Folding a written rating back into the snapshot
 
     @Test("withRating changes only the rating")

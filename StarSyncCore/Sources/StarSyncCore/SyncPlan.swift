@@ -84,11 +84,19 @@ public struct SyncPlan: Sendable {
     public var notEditable: [PlannedChange] { changes.filter { $0.reason == .notEditable } }
 
     public var summary: String {
-        var parts = ["\(writes.count) to write"]
-        if !conflicts.isEmpty { parts.append("\(conflicts.count) conflicts") }
-        if !ambiguous.isEmpty { parts.append("\(ambiguous.count) ambiguous") }
-        if unmatchedCount > 0 { parts.append("\(unmatchedCount) not in Photos") }
-        if !notEditable.isEmpty { parts.append("\(notEditable.count) read-only") }
+        // Grouped digits, like every other count the app shows: a catalog
+        // puts four figures in here routinely, and "3413" read as a number
+        // nowhere else in the window does.
+        var parts = ["\(writes.count.formatted()) to write"]
+        if !conflicts.isEmpty {
+            // The one case that reads as a mistake if it is left plural: a
+            // single disagreement is the most common thing this line reports.
+            let word = conflicts.count == 1 ? "conflict" : "conflicts"
+            parts.append("\(conflicts.count.formatted()) \(word)")
+        }
+        if !ambiguous.isEmpty { parts.append("\(ambiguous.count.formatted()) ambiguous") }
+        if unmatchedCount > 0 { parts.append("\(unmatchedCount.formatted()) not in Photos") }
+        if !notEditable.isEmpty { parts.append("\(notEditable.count.formatted()) read-only") }
         return parts.joined(separator: " · ")
     }
 

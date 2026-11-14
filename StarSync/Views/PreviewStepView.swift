@@ -265,7 +265,7 @@ private struct GroupHeaderRow<Trailing: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(.isHeader)
-            .accessibilityLabel("\(title), \(count) photos")
+            .accessibilityLabel("\(title), \(count) photo\(count == 1 ? "" : "s")")
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
             .accessibilityHint("Shows or hides these photos")
 
