@@ -187,13 +187,39 @@ final class SyncController {
 
     // MARK: Planning
 
-    /// Matches the scoped photos and builds the plan for the chosen mode.
+    /// Re-reads the Lightroom catalog, matches the scoped photos, and builds
+    /// the plan.
+    ///
+    /// The catalog is read again rather than reused. It is read at launch and
+    /// then never changes for the rest of the session, so a star given in
+    /// Lightroom while the app is open used to go unnoticed until it was quit
+    /// and reopened — and Rebuild, the button that exists to say "look again",
+    /// refreshed only the Photos side of the comparison it was rebuilding.
     func buildPlan() async {
         guard let photos else { return }
         isWorking = true
-        statusMessage = "Matching photos…"
         defer { isWorking = false; statusMessage = "" }
 
+        if let libraryURL {
+            statusMessage = "Reading the Lightroom catalog…"
+            do {
+                catalog = try await Task.detached(priority: .userInitiated) {
+                    try CatalogBookmark.withAccess(to: libraryURL) {
+                        try CatalogReader(libraryURL: libraryURL).read()
+                    }
+                }.value
+            } catch {
+                // Leave the plan and the catalog as they were. Building from
+                // the copy we have after failing to read the real one would be
+                // exactly the quiet staleness this re-read is here to remove.
+                errorMessage = describe(error)
+                return
+            }
+        }
+
+        statusMessage = "Matching photos…"
+        // Read after the catalog, not before: the whole point is to plan
+        // against what Lightroom says now.
         let assets = scopedAssets
         let allPhotos = photos.photos
 

@@ -103,7 +103,7 @@ A plan is built from a snapshot, and Photos keeps changing afterwards — someon
 
 So `PhotosWriter` reads each asset's current rating immediately before writing it and calls `SyncPlanner.recheck`. If Photos still holds what the preview showed, the row is written. If not, the row is left alone and reported — the blank it was going to fill is not blank any more, and filling blanks is the only thing done on StarSync's own initiative. The exception is a rating the person set by hand, which is always honoured: they said what they wanted, and the comparison they were shown going stale doesn't withdraw the instruction. `oldRating` is always the live value, so a revert puts back what was really there.
 
-Two cheaper layers sit in front of it: `buildPlan` re-reads the ratings of just the matched photos before deciding anything, and `PhotosChangeWatcher` sets a flag so a stale preview says so and offers to rebuild. Neither can close the window on its own — the preview can go stale the instant after it's drawn, and a run can take minutes — which is why the write-time check is the one that counts.
+Two cheaper layers sit in front of it: `buildPlan` re-reads both sides before deciding anything — the Lightroom catalog, and the ratings of just the matched photos — and `PhotosChangeWatcher` sets a flag so a stale preview says so and offers to rebuild. Neither can close the window on its own — the preview can go stale the instant after it's drawn, and a run can take minutes — which is why the write-time check is the one that counts.
 
 ## The test fixture
 
