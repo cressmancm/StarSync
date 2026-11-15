@@ -6,28 +6,31 @@ import SwiftUI
 struct PreviewStepView: View {
     @Bindable var controller: SyncController
 
-    /// The three buckets the review list is divided into.
+    /// The buckets the review list is divided into.
     ///
     /// Deliberately not called `Section` or `Group`: both shadow SwiftUI types
     /// used a few lines below, and the diagnostics are baffling.
-    /// Order matters: the two short sections come first so that every header
-    /// is on screen when the step opens. "Will write" is the long one — it can
-    /// run to hundreds of rows — so anything below it would need scrolling
-    /// past all of them to find, which is no better than not being there.
+    ///
+    /// The order is the order of the work: what is being asked of you, then
+    /// what will happen, then the two kinds of nothing — the photos the app
+    /// could not tell apart, and the much longer list it is leaving alone.
+    /// Only the last of those is collapsed by default, because it is the one
+    /// nobody needs to read.
     private enum RowGroup: String, CaseIterable, Identifiable {
-        case needsDecision, leavingAlone, willWrite
+        case needsDecision, willWrite, ambiguous, leavingAlone
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .needsDecision: return "Needs your decision"
             case .willWrite: return "Will write"
+            case .ambiguous: return "Matched more than one photo"
             case .leavingAlone: return "Leaving alone"
             }
         }
     }
 
-    @State private var expanded: Set<RowGroup> = [.needsDecision, .willWrite]
+    @State private var expanded: Set<RowGroup> = [.needsDecision, .willWrite, .ambiguous]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,14 +60,6 @@ struct PreviewStepView: View {
                     .monospacedDigit()
             }
 
-            if let plan, !plan.ambiguous.isEmpty {
-                Label(
-                    "Not listed below: \(plan.ambiguous.count) Lightroom photos matched more than one photo in Photos and were left out. They are usually virtual copies.",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -117,14 +112,18 @@ struct PreviewStepView: View {
         switch group {
         case .needsDecision: return waiting
         case .willWrite: return change.willWrite
+        // Not a planned change at all — those rows come from `plan.ambiguous`,
+        // which is `[Match]`, since there is no single photo to plan against.
+        case .ambiguous: return false
         case .leavingAlone: return !waiting && !change.willWrite
         }
     }
 
     private func count(for group: RowGroup) -> Int {
+        if group == .ambiguous { return plan?.ambiguous.count ?? 0 }
         // count(where:) rather than filter().count — no need to copy a
         // couple of thousand rows just to size a header.
-        plan?.changes.count(where: { belongs($0, to: group) }) ?? 0
+        return plan?.changes.count(where: { belongs($0, to: group) }) ?? 0
     }
 
     /// Already in display order: `SyncPlanner.plan` sorts `changes` by name,
@@ -155,6 +154,9 @@ struct PreviewStepView: View {
     /// The breakdown under "Leaving alone", so the detail survives the section
     /// being collapsed — which it is by default.
     private func subtitle(for group: RowGroup) -> String? {
+        if group == .ambiguous {
+            return "Nothing will be written to these. They are usually virtual copies."
+        }
         guard group == .leavingAlone, let plan else { return nil }
         var matches = 0, notRated = 0, readOnly = 0, chosen = 0
         for change in plan.changes where belongs(change, to: .leavingAlone) {
@@ -196,12 +198,19 @@ struct PreviewStepView: View {
                     .listRowSeparator(.hidden)
 
                     if isExpanded(group) {
-                        ForEach(rows(for: group)) { change in
-                            PreviewRow(
-                                change: change,
-                                onSet: { controller.setRating($0, for: change.id) }
-                            )
-                            .padding(.vertical, 2)
+                        if group == .ambiguous {
+                            ForEach(plan?.ambiguous ?? []) { match in
+                                AmbiguousRow(match: match)
+                                    .padding(.vertical, 2)
+                            }
+                        } else {
+                            ForEach(rows(for: group)) { change in
+                                PreviewRow(
+                                    change: change,
+                                    onSet: { controller.setRating($0, for: change.id) }
+                                )
+                                .padding(.vertical, 2)
+                            }
                         }
                     }
                 }
@@ -335,6 +344,57 @@ private struct PreviewRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             StarRatingView(rating: rating, dimmed: rating == 0)
+        }
+    }
+}
+
+/// A Lightroom photo that matched more than one photo in Photos, with the
+/// photos it could not be told apart between.
+///
+/// Nothing is written for these, so there is no picker and no decision to
+/// make. They are listed rather than counted because a count cannot be checked
+/// against anything: seeing the candidates side by side is the only way to
+/// tell a pair of virtual copies, which is the usual and harmless cause, from
+/// matching that has gone wrong.
+private struct AmbiguousRow: View {
+    let match: Match
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                Text(match.asset.fileName)
+                    .font(.body)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                ActionBadge(
+                    text: "\(match.candidates.count) possible matches",
+                    tone: .neutral
+                )
+                Spacer(minLength: 8)
+                HStack(spacing: 5) {
+                    Text("Lightroom")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    StarRatingView(
+                        rating: match.asset.rating,
+                        dimmed: match.asset.rating == 0
+                    )
+                }
+            }
+
+            ForEach(match.candidates) { candidate in
+                HStack(spacing: 8) {
+                    ThumbnailView(localIdentifier: candidate.id, side: 36)
+                    Text(candidate.originalFilename ?? "No file name")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    StarRatingView(rating: candidate.rating, dimmed: candidate.rating == 0)
+                }
+            }
+            .padding(.leading, 10)
         }
     }
 }
