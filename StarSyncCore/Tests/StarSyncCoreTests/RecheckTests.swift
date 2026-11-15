@@ -2,9 +2,10 @@ import Foundation
 import Testing
 @testable import StarSyncCore
 
-/// A plan is built from a snapshot of Photos, and Photos keeps changing after
-/// that. These cover what happens when the rating a row was planned against is
-/// no longer the rating Photos holds.
+/// A plan is built from a snapshot of both libraries taken when the app
+/// opened, and both keep changing after that. These cover what happens when
+/// the ratings a row was planned against are no longer the ratings either
+/// library holds.
 @Suite("Recheck against live ratings")
 struct RecheckTests {
 
@@ -59,6 +60,57 @@ struct RecheckTests {
         let change = plan.changes[0]
         #expect(change.isManualOverride)
         #expect(SyncPlanner.recheck(change, liveRating: 3) == .write(5))
+    }
+
+    // MARK: Lightroom moved underneath the preview
+
+    @Test("A rating changed in Lightroom is not written from the old value")
+    func respectsALightroomChange() {
+        // Planned to write 4★ from Lightroom. Lightroom now says 2★, so the
+        // rating the row was going to carry across no longer exists.
+        let change = planned(lr: 4, photos: 0)
+        #expect(change.willWrite)
+        #expect(SyncPlanner.recheck(change, liveRating: 0, lightroomRating: 2)
+                == .changedInLightroom(liveRating: 2))
+    }
+
+    @Test("A rating taken back down to 0 in Lightroom is skipped, not written")
+    func lightroomUnratedIsSkipped() {
+        // Safety rule 5 falls out of the same comparison: 0 differs from what
+        // was planned, so the row is left alone rather than clearing Photos.
+        let change = planned(lr: 4, photos: 0)
+        #expect(SyncPlanner.recheck(change, liveRating: 0, lightroomRating: 0)
+                == .changedInLightroom(liveRating: 0))
+    }
+
+    @Test("Lightroom holding what it held is written as planned")
+    func lightroomUnchangedWrites() {
+        let change = planned(lr: 4, photos: 0)
+        #expect(SyncPlanner.recheck(change, liveRating: 0, lightroomRating: 4)
+                == .write(4))
+    }
+
+    @Test("No Lightroom rating given means no Lightroom check")
+    func nilMeansNoCheck() {
+        // What the app passes when the catalog file has not been touched since
+        // it was read: nothing can have changed, so nothing is compared.
+        let change = planned(lr: 4, photos: 0)
+        #expect(SyncPlanner.recheck(change, liveRating: 0, lightroomRating: nil)
+                == .write(4))
+    }
+
+    @Test("An explicit choice is honoured even though Lightroom moved")
+    func overrideStandsOverLightroom() {
+        var plan = SyncPlan(
+            changes: [planned(lr: 5, photos: 2)],
+            unmatchedCount: 0,
+            ambiguous: []
+        )
+        plan.setRating(3, for: "a")
+        let change = plan.changes[0]
+        #expect(change.isManualOverride)
+        #expect(SyncPlanner.recheck(change, liveRating: 2, lightroomRating: 1)
+                == .write(3))
     }
 
     // MARK: Where the override flag comes from

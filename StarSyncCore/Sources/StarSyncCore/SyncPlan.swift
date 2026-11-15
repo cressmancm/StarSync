@@ -152,6 +152,9 @@ public enum RecheckOutcome: Sendable, Equatable {
     /// Photos changed since the preview, so the row is left alone and
     /// reported rather than overwritten.
     case changedInPhotos(liveRating: Int)
+    /// Lightroom changed since the preview, so what the row was going to
+    /// write is no longer what Lightroom says. Left alone and reported.
+    case changedInLightroom(liveRating: Int)
 }
 
 public enum SyncPlanner {
@@ -227,29 +230,50 @@ public enum SyncPlanner {
         )
     }
 
-    /// Checks one planned row against the rating Photos holds right now.
+    /// Checks one planned row against both libraries as they are right now.
     ///
-    /// The plan was built from a snapshot. If that snapshot is still accurate
-    /// for this photo the row is written as planned. If Photos has moved on,
-    /// the row is left alone and reported — filling in a blank is the only
-    /// thing this code does on its own initiative, and the blank it was going
-    /// to fill is no longer blank.
-    public static func recheck(_ change: PlannedChange, liveRating: Int) -> RecheckOutcome {
+    /// This is the only staleness check there is. Both libraries are read when
+    /// the app opens and not again, so by the time anything is written the
+    /// plan can be any age at all — which is fine, because nothing is written
+    /// without passing through here first.
+    ///
+    /// `lightroomRating` is the rating Lightroom holds for this photo now, or
+    /// `nil` when the catalog is known not to have changed since it was read
+    /// and there is nothing to compare against.
+    ///
+    /// A row whose either side has moved is left alone and reported. Filling in
+    /// a blank is the only thing this code does on its own initiative, and it
+    /// will not do it from a rating Lightroom no longer gives, or over a blank
+    /// that is no longer blank.
+    public static func recheck(
+        _ change: PlannedChange,
+        liveRating: Int,
+        lightroomRating: Int? = nil
+    ) -> RecheckOutcome {
         guard let intended = change.newRating else { return .alreadyCorrect }
 
         // Already where it needs to be, whoever put it there.
         if liveRating == intended { return .alreadyCorrect }
 
+        // An explicit choice stands, whichever side moved underneath it. The
+        // person named this rating; the comparison they were shown going out
+        // of date does not withdraw their instruction. The undo log records
+        // the live value, so this stays reversible.
+        if change.isManualOverride { return .write(intended) }
+
+        // Lightroom changed underneath the preview. Checked before Photos
+        // because this is where the intended rating came from: if the source
+        // has moved, the row is stale no matter what Photos holds.
+        //
+        // This also covers a rating taken back down to 0★ in Lightroom, which
+        // differs from what was planned and so is skipped rather than written
+        // — safety rule 5, arrived at here for free.
+        if let now = lightroomRating, now != change.asset.rating {
+            return .changedInLightroom(liveRating: now)
+        }
+
         // Photos still holds what the preview showed: no interference.
         if liveRating == change.photo.rating { return .write(intended) }
-
-        // Photos changed underneath the preview.
-        //
-        // An explicit choice stands: the person named this rating, and the
-        // rating they were comparing against being out of date does not make
-        // their instruction go away. The undo log records the live value, so
-        // this stays reversible.
-        if change.isManualOverride { return .write(intended) }
 
         return .changedInPhotos(liveRating: liveRating)
     }

@@ -30,10 +30,10 @@ struct ApplyStepView: View {
 
                 if !result.skipped.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("\(result.skipped.count) left alone — rated in Photos after the preview was built:")
+                        Text("\(result.skipped.count) left alone — changed since the preview was built:")
                             .font(.callout.weight(.medium))
                         ForEach(Array(result.skipped.prefix(6).enumerated()), id: \.offset) { _, skip in
-                            Text("\(skip.filename) — Photos has \(skip.liveRating)★, Lightroom has \(skip.plannedRating)★")
+                            Text(skip.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

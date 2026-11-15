@@ -45,33 +45,16 @@ final class SyncController {
     /// Set after a successful revert, so the Done screen can report it.
     var revertedCount: Int?
 
-    /// True when Photos has changed since the current plan was built.
+    /// When the catalog file was last written, as of the read in `load()`.
     ///
-    /// The preview is a drawing of a moment that has passed. Applying is still
-    /// safe — every row is rechecked against the live rating before it is
-    /// written — but the numbers on screen may no longer be the ones being
-    /// compared, and the person deserves to know that rather than discover it
-    /// in the result.
-    var photosChangedSincePlan = false
-
-    private var watcher: PhotosChangeWatcher?
+    /// Compared against the file on disk before a run, so an unchanged catalog
+    /// costs nothing to rule out. `CatalogReader` copies the catalog before
+    /// opening it, so reading it again to find nothing is not free.
+    private var catalogModified: Date?
 
     init() {
         libraryURL = CatalogBookmark.restore()
         lastRun = UndoLog.shared.mostRecentRun
-        watcher = PhotosChangeWatcher { [weak self] in
-            self?.photosDidChange()
-        }
-    }
-
-    /// Photos told us something changed.
-    ///
-    /// Our own writes raise this too, so changes are ignored while a run is in
-    /// flight; `apply` and `revert` clear the flag themselves once they have
-    /// folded their results back in.
-    private func photosDidChange() {
-        guard !isWorking, plan != nil else { return }
-        photosChangedSincePlan = true
     }
 
     var catalogName: String {
@@ -165,6 +148,7 @@ final class SyncController {
 
             self.catalog = catalog
             self.photos = photos
+            self.catalogModified = Self.catalogModificationDate(for: libraryURL)
             statusMessage = ""
         } catch {
             errorMessage = describe(error)
@@ -187,67 +171,34 @@ final class SyncController {
 
     // MARK: Planning
 
-    /// Re-reads the Lightroom catalog, matches the scoped photos, and builds
-    /// the plan.
+    /// Matches the scoped photos against the snapshot and builds the plan.
     ///
-    /// The catalog is read again rather than reused. It is read at launch and
-    /// then never changes for the rest of the session, so a star given in
-    /// Lightroom while the app is open used to go unnoticed until it was quit
-    /// and reopened — and Rebuild, the button that exists to say "look again",
-    /// refreshed only the Photos side of the comparison it was rebuilding.
+    /// Reads nothing. Both libraries are read once, in `load()`, and the plan
+    /// is drawn from that — so this is a picture of the moment the app opened,
+    /// and it is allowed to be. `PhotosWriter` checks every row against both
+    /// libraries immediately before writing it, which is the only check that
+    /// can actually be relied on: a preview can go stale the instant after it
+    /// is drawn, and a run can take minutes.
     func buildPlan() async {
         guard let photos else { return }
         isWorking = true
+        statusMessage = "Matching photos…"
         defer { isWorking = false; statusMessage = "" }
 
-        if let libraryURL {
-            statusMessage = "Reading the Lightroom catalog…"
-            do {
-                catalog = try await Task.detached(priority: .userInitiated) {
-                    try CatalogBookmark.withAccess(to: libraryURL) {
-                        try CatalogReader(libraryURL: libraryURL).read()
-                    }
-                }.value
-            } catch {
-                // Leave the plan and the catalog as they were. Building from
-                // the copy we have after failing to read the real one would be
-                // exactly the quiet staleness this re-read is here to remove.
-                errorMessage = describe(error)
-                return
-            }
-        }
-
-        statusMessage = "Matching photos…"
-        // Read after the catalog, not before: the whole point is to plan
-        // against what Lightroom says now.
         let assets = scopedAssets
         let allPhotos = photos.photos
 
-        // Match first: matching reads file names, dates and dimensions, never
-        // ratings, so the snapshot being out of date cannot affect it.
+        // Matching reads file names, dates and dimensions, never ratings, so
+        // the snapshot's age cannot affect which photo is paired with which.
         let report = await Task.detached(priority: .userInitiated) {
             Matcher().match(assets: assets, photos: allPhotos)
         }.value
 
-        // Then re-read the ratings of just the photos this run could touch.
-        // That is a few hundred direct lookups rather than another walk over
-        // the whole library, and it means the preview compares against what is
-        // in Photos now rather than whenever the app last loaded.
-        statusMessage = "Checking current ratings…"
-        let matched = report.matchedPhotoIdentifiers
-        let fresh = await Task.detached(priority: .userInitiated) {
-            PhotosLibrary.ratings(for: matched)
-        }.value
-        // `photos` here is the local snapshot bound by the guard above; the
-        // stored one is what the next pass will read.
-        self.photos?.apply(ratings: fresh)
-
         let plan = await Task.detached(priority: .userInitiated) {
-            SyncPlanner.plan(from: report.updatingPhotoRatings(fresh))
+            SyncPlanner.plan(from: report)
         }.value
 
         self.plan = plan
-        photosChangedSincePlan = false
         step = .preview
     }
 
@@ -261,8 +212,14 @@ final class SyncController {
         statusMessage = "Writing ratings…"
         defer { isWorking = false; progress = nil; statusMessage = "" }
 
+        let lightroomRatings = await currentLightroomRatings()
+
         let written = plan.writes.map(\.photo.id)
-        let result = await PhotosWriter.apply(plan: plan, catalogName: catalogName) { done, total in
+        let result = await PhotosWriter.apply(
+            plan: plan,
+            catalogName: catalogName,
+            lightroomRatings: lightroomRatings
+        ) { done, total in
             self.progress = total > 0 ? Double(done) / Double(total) : nil
             self.statusMessage = "Writing ratings… \(done) of \(total)"
         }
@@ -275,13 +232,55 @@ final class SyncController {
         await refreshRatings(for: written)
 
         // Clear the working state before showing the Done screen, so Revert
-        // is live and no stale progress text is left behind. The change
-        // notifications our own writes just raised are not news.
+        // is live and no stale progress text is left behind.
         isWorking = false
         progress = nil
         statusMessage = ""
-        photosChangedSincePlan = false
         step = .apply
+    }
+
+    /// What Lightroom holds right now, for checking against before writing.
+    ///
+    /// `nil` when the catalog file has not been written since it was read, in
+    /// which case no rating in it can have changed and there is nothing to
+    /// compare — so nothing is read. This is the usual case, and it matters
+    /// because `CatalogReader` copies the catalog before opening it.
+    ///
+    /// Lightroom touches the file as it syncs, so the date can move without
+    /// any rating having changed; the cost of that is one read that finds
+    /// nothing, once, at the start of a run.
+    private func currentLightroomRatings() async -> [String: Int]? {
+        guard let libraryURL,
+              let wasModified = catalogModified,
+              let nowModified = Self.catalogModificationDate(for: libraryURL),
+              nowModified != wasModified
+        else { return nil }
+
+        statusMessage = "Checking Lightroom…"
+        guard let fresh = try? await Task.detached(priority: .userInitiated, operation: {
+            try CatalogBookmark.withAccess(to: libraryURL) {
+                try CatalogReader(libraryURL: libraryURL).read()
+            }
+        }).value else {
+            // Unreadable right now — Lightroom may be mid-write. Writing is
+            // still safe: every row is checked against Photos regardless, and
+            // a row whose Lightroom rating moved will be caught on the next
+            // run instead.
+            return nil
+        }
+
+        catalog = fresh
+        catalogModified = nowModified
+        return fresh.assets.reduce(into: [:]) { $0[$1.id] = $1.rating }
+    }
+
+    /// When the catalog database inside the `.lrlibrary` was last written.
+    private static func catalogModificationDate(for libraryURL: URL) -> Date? {
+        try? CatalogBookmark.withAccess(to: libraryURL) {
+            let file = try CatalogReader.locateCatalog(in: libraryURL)
+            return try FileManager.default
+                .attributesOfItem(atPath: file.path)[.modificationDate] as? Date
+        }
     }
 
     func revertLastRun() async {
@@ -303,7 +302,6 @@ final class SyncController {
             lastRun = nil
             applyResult = nil
             revertedCount = result.written
-            photosChangedSincePlan = false
         } else {
             errorMessage = result.failed.first?.reason
         }

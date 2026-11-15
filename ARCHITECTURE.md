@@ -92,18 +92,22 @@ The rules the design holds to, in order of how much they matter:
 3. Nothing is written before the person has seen the plan.
 4. Every run is recorded to `~/Library/Application Support/StarSync/runs/` **before** the first write, so an interrupted run is still reversible.
 5. A photo unrated in Lightroom never clears a rating in Photos.
-6. Every row is rechecked against the live rating in Photos immediately before it's written.
+6. Every row is rechecked against both libraries immediately before it's written.
 
 ### Why rule 6 exists
 
-A plan is built from a snapshot, and Photos keeps changing afterwards — someone can rate a photo in Photos.app while the preview is on screen, or while a long run is still writing. Acting on the snapshot alone meant two things could go wrong:
+A plan is built from a snapshot of both libraries taken when the app opens, and both keep changing afterwards — someone can rate a photo in Photos.app or in Lightroom while the preview is on screen, or while a long run is still writing. Acting on the snapshot alone meant two things could go wrong:
 
 - **A write could land on a rating it was never meant to touch.** Filling in a blank is the one thing StarSync does without asking. If the snapshot said unrated and Photos had since been rated, that write landed on top of a real rating.
 - **The undo log recorded the wrong value.** `oldRating` came from the snapshot, so reverting restored the stale rating rather than the one that was actually overwritten — the edit was unrecoverable through the one button meant to recover it.
 
 So `PhotosWriter` reads each asset's current rating immediately before writing it and calls `SyncPlanner.recheck`. If Photos still holds what the preview showed, the row is written. If not, the row is left alone and reported — the blank it was going to fill is not blank any more, and filling blanks is the only thing done on StarSync's own initiative. The exception is a rating the person set by hand, which is always honoured: they said what they wanted, and the comparison they were shown going stale doesn't withdraw the instruction. `oldRating` is always the live value, so a revert puts back what was really there.
 
-Two cheaper layers sit in front of it: `buildPlan` re-reads both sides before deciding anything — the Lightroom catalog, and the ratings of just the matched photos — and `PhotosChangeWatcher` sets a flag so a stale preview says so and offers to rebuild. Neither can close the window on its own — the preview can go stale the instant after it's drawn, and a run can take minutes — which is why the write-time check is the one that counts.
+The same check covers Lightroom, which is why `apply` hands the writer the ratings Lightroom holds now. A row whose Lightroom rating has moved is left alone too: the rating it was going to carry across no longer exists, and that includes one taken back down to 0★, so rule 5 falls out of the same comparison rather than needing its own guard at write time.
+
+Reading the catalog again is not free — it's copied before it's opened — so the file's modification date is checked first. An untouched catalog can't hold a changed rating, so nothing is read, which is the usual case.
+
+**There used to be two cheaper layers in front of this**, and removing them is the point. `buildPlan` re-read both libraries before planning, and a `PhotosChangeWatcher` put an orange banner and a Rebuild button on a stale preview. Neither could close the window on its own — a preview can go stale the instant after it's drawn, and a run can take minutes — so neither was ever what made writing safe. They only stopped you *looking at* a stale preview, at the cost of copying a 430 MB catalog on every Continue and keeping four pieces of state alive to drive a banner. The Done screen already says what was skipped and why, afterwards, when it's actually known. One check, at the moment it matters, is the whole design.
 
 ## The test fixture
 

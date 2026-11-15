@@ -12,19 +12,37 @@ enum PhotosWriter {
     /// asset cannot take a whole run down with it.
     static let batchSize = 200
 
-    /// A row that was left alone because Photos had moved on since the preview.
+    /// A row that was left alone because one of the libraries moved on after
+    /// the preview was built.
     struct SkippedChange: Sendable {
+        /// Which side moved. The remedy differs, so the Done screen says which.
+        enum Reason: Sendable {
+            case photosChanged
+            case lightroomChanged
+        }
+
         let filename: String
-        /// What Photos holds now.
+        let reason: Reason
+        /// What the library that moved holds now.
         let liveRating: Int
         /// What the preview was going to write.
         let plannedRating: Int
+
+        /// One line naming which side moved and what it says now.
+        var detail: String {
+            switch reason {
+            case .photosChanged:
+                return "\(filename) — Photos has \(liveRating)★, Lightroom has \(plannedRating)★"
+            case .lightroomChanged:
+                return "\(filename) — Lightroom now has \(liveRating)★, the preview had \(plannedRating)★"
+            }
+        }
     }
 
     struct Result: Sendable {
         var written: Int = 0
         var failed: [(filename: String, reason: String)] = []
-        /// Rows dropped because someone rated the photo in Photos after the
+        /// Rows dropped because one of the libraries moved on after the
         /// preview was built. Reported rather than silently overwritten.
         var skipped: [SkippedChange] = []
         var run: SyncRun?
@@ -32,14 +50,19 @@ enum PhotosWriter {
 
     /// Applies every row of `plan` that wants to write.
     ///
-    /// The plan came from a snapshot, so each row is checked once more against
-    /// the rating Photos holds right now, immediately before it is written.
-    /// That is what keeps "Add only" from overwriting a rating added while the
-    /// preview was open, and it is why the undo log records the live rating
-    /// rather than the one the preview displayed.
+    /// The plan came from a snapshot taken when the app opened, so each row is
+    /// checked once more against both libraries immediately before it is
+    /// written. This is the only staleness check in the app, which is why it
+    /// is also why the undo log records the live rating rather than the one
+    /// the preview displayed.
+    ///
+    /// `lightroomRatings` maps `LRAsset.id` to the rating Lightroom holds now.
+    /// It is `nil` when the catalog has not been touched since it was read, in
+    /// which case there is nothing to compare and nothing was read.
     static func apply(
         plan: SyncPlan,
         catalogName: String,
+        lightroomRatings: [String: Int]?,
         progress: @MainActor (Int, Int) -> Void
     ) async -> Result {
         let pending = plan.writes
@@ -90,13 +113,26 @@ enum PhotosWriter {
                 }
 
                 let live = asset.rating.rawValue
-                switch SyncPlanner.recheck(change, liveRating: live) {
+                let lightroomNow = lightroomRatings.flatMap { $0[change.asset.id] }
+                switch SyncPlanner.recheck(
+                    change, liveRating: live, lightroomRating: lightroomNow
+                ) {
                 case .alreadyCorrect:
                     continue
                 case .changedInPhotos(let liveRating):
                     result.skipped.append(
                         SkippedChange(
                             filename: change.displayName,
+                            reason: .photosChanged,
+                            liveRating: liveRating,
+                            plannedRating: change.newRating ?? liveRating
+                        )
+                    )
+                case .changedInLightroom(let liveRating):
+                    result.skipped.append(
+                        SkippedChange(
+                            filename: change.displayName,
+                            reason: .lightroomChanged,
                             liveRating: liveRating,
                             plannedRating: change.newRating ?? liveRating
                         )
