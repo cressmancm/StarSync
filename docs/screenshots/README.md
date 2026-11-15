@@ -17,25 +17,20 @@ Don't expect one in a shot.
 
 | File | Step | Appearance | What it shows |
 |---|---|---|---|
+| `preview-dark.png` | Review | Dark | The money shot. Four conflicts waiting on a decision, one rating about to be written, and the Lightroom → Photos star columns beside each row. |
+| `preview-light.png` | Review | Light | The same album at the same scroll position, for showing the pair side by side. |
 | `source-dark.png` | Choose photos | Dark | The album list sorted by name, Entire catalog pinned at the top, counts on every row, and the "29 albums with no rated photos hidden" footer. |
-| `apply-dark.png` | Done | Dark | A finished run: "Wrote 1 rating to Photos.", and underneath it the row that was left alone because Photos moved on after the preview was built — rule 6 doing its job, which no other shot shows. |
+| `apply-dark.png` | Done | Dark | A finished run: "Wrote 1 rating to Photos.", and underneath it the row left alone because Photos moved on after the preview was built — rule 6 doing its job, which no other shot shows. |
+| `preview-stale-dark.png` | Review | Dark | The orange "Ratings in Photos have changed" banner and its Rebuild button, which nothing else shows either. |
 
-## Still needed
+## Not illustrated
 
-| File | Step | Appearance | What it should show |
-|---|---|---|---|
-| `preview-dark.png` | Review | Dark | The money shot. Needs your decision open with conflicts in it, Will write below, and the Lightroom → Photos star columns readable. |
-| `preview-light.png` | Review | Light | The same album and scroll position, so the pair can be shown side by side. |
-
-Both were taken on 2026-11-14 and then thrown away: the Review screen's sections
-were reordered the same day, so the shots showed a layout the app no longer
-produces. A dark one that also catches the orange "Ratings in Photos have
-changed" banner is worth having too, and so is the ambiguous section — neither
-appears anywhere else.
-
-Getting them is short: open the app, pick **StarSync Demo**, Continue, pause a
-few seconds on Review, then flip the system appearance to Light and pause
-again.
+The **Matched more than one photo** section has no shot, and can't easily get
+one. It only lists photos that are rated in Lightroom *and* matched more than
+one photo in Photos, and none of the fourteen in StarSync Demo are both. The
+only place it appears is a whole-catalog run, whose thumbnails are not cleared
+for publishing. Putting one in would mean adding an ambiguous photo to the demo
+album and rating it.
 
 ## Before publishing
 
