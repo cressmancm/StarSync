@@ -31,6 +31,13 @@ public struct Match: Sendable, Identifiable {
         if case .matched(let photo, _) = outcome { return photo }
         return nil
     }
+
+    /// The photos this Lightroom photo could not be told apart between.
+    /// Empty unless the outcome is `.ambiguous`.
+    public var candidates: [PhotoAsset] {
+        if case .ambiguous(let photos) = outcome { return photos }
+        return []
+    }
 }
 
 public struct MatchReport: Sendable {
@@ -71,7 +78,15 @@ public struct Matcher: Sendable {
     }
 
     public func match(assets: [LRAsset], photos: [PhotoAsset]) -> MatchReport {
-        var index: [String: [PhotoAsset]] = [:]
+        // Photos under the name they actually carry.
+        var byName: [String: [PhotoAsset]] = [:]
+        // Photos that look like an edit, filed under the name of the original
+        // they came from, so a raw file can find the export made from it.
+        //
+        // Kept apart from `byName` rather than folded into it: which of the
+        // two a photo was found through is the only thing that distinguishes
+        // an exact match from a guess, and merging them threw that away.
+        var byOriginalName: [String: [PhotoAsset]] = [:]
         var unidentifiable = 0
 
         for photo in photos {
@@ -79,33 +94,80 @@ public struct Matcher: Sendable {
                 unidentifiable += 1
                 continue
             }
-            index[stem, default: []].append(photo)
-            // Also index under the base name, so a Lightroom original can find
-            // a Photos copy that was exported as "DSCF4087-Edit.jpg".
-            if let base = FilenameMatching.strippingDerivedSuffix(stem), index[base] == nil || !index[base]!.contains(where: { $0.id == photo.id }) {
-                index[base, default: []].append(photo)
+            byName[stem, default: []].append(photo)
+            if let base = FilenameMatching.strippingDerivedSuffix(stem) {
+                byOriginalName[base, default: []].append(photo)
             }
         }
 
         let matches = assets.map { asset in
-            Match(asset: asset, outcome: outcome(for: asset, in: index))
+            Match(
+                asset: asset,
+                outcome: outcome(for: asset, byName: byName, byOriginalName: byOriginalName)
+            )
         }
-        return MatchReport(matches: matches, unidentifiablePhotos: unidentifiable)
+        return MatchReport(
+            matches: settlingContestedPhotos(matches),
+            unidentifiablePhotos: unidentifiable
+        )
+    }
+
+    /// Gives up a derived-suffix match when another Lightroom photo claims the
+    /// same photo by its exact file name.
+    ///
+    /// An export called `NZ8_3332-Edit.jpg` goes into the index twice: under
+    /// its own stem, and under `NZ8_3332`, so that the raw original can find
+    /// the edit that came from it. That is the right behaviour until the
+    /// catalog holds *both* `NZ8_3332-Edit.tif` and `NZ8_3332.NEF`, when both
+    /// find it and one photo collects two rows proposing to write it — rows
+    /// that disagree if the two Lightroom photos are rated differently, and
+    /// are settled by whichever happens to be written last.
+    ///
+    /// The exact name is the better evidence, so the derived claim gives way.
+    /// It reports nothing in Photos, which is the truth about it: whatever it
+    /// was exported as is already accounted for by the photo that matched by
+    /// name. Two exact claims on one photo are left alone — neither is the
+    /// better evidence, and inventing a winner would hide a real oddity.
+    private func settlingContestedPhotos(_ matches: [Match]) -> [Match] {
+        var claimedByName = Set<String>()
+        for match in matches {
+            if case .matched(let photo, let confidence) = match.outcome,
+               confidence != .derivedFilename {
+                claimedByName.insert(photo.id)
+            }
+        }
+        guard !claimedByName.isEmpty else { return matches }
+
+        return matches.map { match in
+            guard case .matched(let photo, .derivedFilename) = match.outcome,
+                  claimedByName.contains(photo.id) else { return match }
+            return Match(asset: match.asset, outcome: .notInPhotos)
+        }
     }
 
     // MARK: - Resolution
 
-    private func outcome(for asset: LRAsset, in index: [String: [PhotoAsset]]) -> MatchOutcome {
+    private func outcome(
+        for asset: LRAsset,
+        byName: [String: [PhotoAsset]],
+        byOriginalName: [String: [PhotoAsset]]
+    ) -> MatchOutcome {
         let stem = asset.stem
         guard !stem.isEmpty else { return .notInPhotos }
 
-        if let candidates = index[stem], !candidates.isEmpty {
+        // The names agree, which is the strongest thing a name can tell us.
+        if let candidates = byName[stem], !candidates.isEmpty {
             return resolve(asset: asset, candidates: candidates, baseConfidence: .uniqueFilename)
         }
-        // Second pass: a Lightroom file that is itself a derived file, e.g.
-        // "DSCF3438-Edit.tiff" exported as "DSCF3438.jpg".
+        // The photo is an edit of this file: "DSCF3438.RAF" finding
+        // "DSCF3438-Edit.jpg".
+        if let candidates = byOriginalName[stem], !candidates.isEmpty {
+            return resolve(asset: asset, candidates: candidates, baseConfidence: .derivedFilename)
+        }
+        // This file is itself an edit: "DSCF3438-Edit.tiff" finding
+        // "DSCF3438.jpg".
         if let base = FilenameMatching.strippingDerivedSuffix(stem),
-           let candidates = index[base], !candidates.isEmpty {
+           let candidates = byName[base], !candidates.isEmpty {
             return resolve(asset: asset, candidates: candidates, baseConfidence: .derivedFilename)
         }
         return .notInPhotos

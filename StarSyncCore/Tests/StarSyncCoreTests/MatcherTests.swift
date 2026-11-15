@@ -70,6 +70,48 @@ struct MatcherTests {
         }
     }
 
+    @Test("the exact file name beats a derived one for the same photo")
+    func exactNameWinsAContestedPhoto() {
+        // The catalog holds the raw and the edit it produced; Photos holds one
+        // export. Both Lightroom photos can reach it — the edit by its own
+        // name, the raw through the stripped suffix — and without settling it
+        // the one photo collects two rows.
+        let report = matcher.match(
+            assets: [lr("NZ8_3332-Edit.tif", rating: 5), lr("NZ8_3332.NEF", rating: 2)],
+            photos: [photo("p1", "NZ8_3332-Edit.jpg")]
+        )
+        #expect(report.matched.count == 1)
+        #expect(report.matched[0].asset.fileName == "NZ8_3332-Edit.tif")
+        #expect(report.notInPhotos.count == 1)
+        #expect(report.notInPhotos[0].asset.fileName == "NZ8_3332.NEF")
+    }
+
+    @Test("a derived match still stands when nothing else claims the photo")
+    func derivedMatchSurvivesUncontested() {
+        // The raw on its own must still find the export: this is the whole
+        // point of indexing the stripped name.
+        let report = matcher.match(
+            assets: [lr("NZ8_3332.NEF", rating: 5)],
+            photos: [photo("p1", "NZ8_3332-Edit.jpg")]
+        )
+        #expect(report.matched.count == 1)
+        #expect(report.matches[0].photo?.id == "p1")
+        if case .matched(_, let confidence) = report.matches[0].outcome {
+            #expect(confidence == .derivedFilename)
+        }
+    }
+
+    @Test("two photos contested by name only are both left alone")
+    func twoExactClaimsAreNotInvented() {
+        // Neither is the better evidence, so nothing is demoted; the oddity
+        // stays visible rather than being silently resolved.
+        let report = matcher.match(
+            assets: [lr("DSCF4087.RAF"), lr("DSCF4087.jpg")],
+            photos: [photo("p1", "DSCF4087.jpg")]
+        )
+        #expect(report.matched.count == 2)
+    }
+
     @Test("a photo that was never exported is reported, not guessed at")
     func noMatch() {
         let report = matcher.match(
@@ -185,9 +227,13 @@ struct MatcherTests {
                 photo("derived", "DSCF3438-Edit.jpg"),
             ]
         )
-        // Both land under the "dscf3438" key, so time and dimensions decide;
-        // what matters is that the exact file is not discarded.
-        #expect(report.matches[0].photo != nil || report.ambiguous.count == 1)
+        // The exact name is looked up first and on its own, so this no longer
+        // falls through to time and dimensions: the exactly named photo wins
+        // outright and the edit is not even a candidate.
+        #expect(report.matches[0].photo?.id == "exact")
+        if case .matched(_, let confidence) = report.matches[0].outcome {
+            #expect(confidence == .uniqueFilename)
+        }
     }
 
     @Test("photos with no file name are counted, never matched")
