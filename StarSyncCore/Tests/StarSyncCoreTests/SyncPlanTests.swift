@@ -171,6 +171,49 @@ struct SyncPlanTests {
         #expect(plan.summary.contains("1 ambiguous"))
     }
 
+    @Test("An unrated photo's ambiguity is not reported")
+    func ambiguityOnlyMattersWhenRated() {
+        func plan(rating: Int) -> SyncPlan {
+            let unsure = Match(
+                asset: LRAsset(id: "c", fileName: "c.NEF", rating: rating),
+                outcome: .ambiguous([
+                    PhotoAsset(id: "p1", originalFilename: "c.jpg", creationDate: nil, rating: 0),
+                    PhotoAsset(id: "p2", originalFilename: "c.jpg", creationDate: nil, rating: 0),
+                ])
+            )
+            return SyncPlanner.plan(
+                from: MatchReport(matches: [unsure], unidentifiablePhotos: 0)
+            )
+        }
+        // Nothing would be written for it either way, so there is nothing to
+        // tell anyone about.
+        #expect(plan(rating: 0).ambiguous.isEmpty)
+        #expect(!plan(rating: 0).summary.contains("ambiguous"))
+        // Rated, and now it matters: a rating cannot get through.
+        #expect(plan(rating: 5).ambiguous.count == 1)
+        #expect(plan(rating: 5).summary.contains("1 ambiguous"))
+    }
+
+    @Test("Resolving a conflict takes it out of the count")
+    func conflictCountFollowsTheDecisions() {
+        let conflict = Match(
+            asset: LRAsset(id: "a", fileName: "a.NEF", rating: 5),
+            outcome: .matched(PhotoAsset(id: "p", originalFilename: "a.jpg",
+                                         creationDate: nil, rating: 3),
+                              confidence: .uniqueFilename)
+        )
+        var plan = SyncPlanner.plan(
+            from: MatchReport(matches: [conflict], unidentifiablePhotos: 0)
+        )
+        #expect(plan.summary.contains("1 conflict"))
+
+        // Deciding it is exactly what the headline should stop reporting: the
+        // row is settled, even though it is still a conflict by reason.
+        plan.setRating(5, for: plan.changes[0].id)
+        #expect(!plan.summary.contains("conflict"))
+        #expect(plan.summary.contains("1 to write"))
+    }
+
     @Test("One conflict is a conflict, not conflicts")
     func summaryPluralisesConflicts() {
         func plan(conflicts: Int) -> SyncPlan {

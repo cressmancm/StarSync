@@ -69,7 +69,13 @@ public struct SyncPlan: Sendable {
     public var changes: [PlannedChange]
     /// Lightroom photos with no counterpart in Photos.
     public let unmatchedCount: Int
-    /// Lightroom photos whose counterpart could not be identified uniquely.
+    /// Rated Lightroom photos whose counterpart could not be identified
+    /// uniquely.
+    ///
+    /// Only rated ones. An unrated photo is never written whatever it matches,
+    /// so not knowing which photo it is has no consequence worth reporting —
+    /// and a catalog full of untriaged raws would otherwise bury the handful
+    /// of cases where the ambiguity actually stops a rating getting through.
     public let ambiguous: [Match]
 
     public init(changes: [PlannedChange], unmatchedCount: Int, ambiguous: [Match]) {
@@ -88,11 +94,16 @@ public struct SyncPlan: Sendable {
         // puts four figures in here routinely, and "3413" read as a number
         // nowhere else in the window does.
         var parts = ["\(writes.count.formatted()) to write"]
-        if !conflicts.isEmpty {
+        // The ones still waiting, not every row that ever disagreed. `reason`
+        // records why a row was flagged and never changes when it is settled,
+        // so counting that left the headline claiming four conflicts directly
+        // under a list where all four had just been resolved.
+        let undecided = pendingReview.count
+        if undecided > 0 {
             // The one case that reads as a mistake if it is left plural: a
             // single disagreement is the most common thing this line reports.
-            let word = conflicts.count == 1 ? "conflict" : "conflicts"
-            parts.append("\(conflicts.count.formatted()) \(word)")
+            let word = undecided == 1 ? "conflict" : "conflicts"
+            parts.append("\(undecided.formatted()) \(word)")
         }
         if !ambiguous.isEmpty { parts.append("\(ambiguous.count.formatted()) ambiguous") }
         if unmatchedCount > 0 { parts.append("\(unmatchedCount.formatted()) not in Photos") }
@@ -170,7 +181,9 @@ public enum SyncPlanner {
         return SyncPlan(
             changes: changes,
             unmatchedCount: report.notInPhotos.count,
-            ambiguous: report.ambiguous
+            // See `SyncPlan.ambiguous`: an unrated photo's ambiguity changes
+            // nothing, so it is not worth putting in front of anyone.
+            ambiguous: report.ambiguous.filter { $0.asset.isRated }
         )
     }
 
