@@ -24,4 +24,4 @@ is never written to.
 ratings before and after — so that Revert can undo it. It stays inside the
 app's own container on your Mac, and deleting the app deletes it.
 
-**Contact.** Questions about this policy: hello@chipcressman.com.
+**Contact.** Questions about this policy: apps@chipcressman.com.
