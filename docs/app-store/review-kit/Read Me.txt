@@ -1,0 +1,46 @@
+StarSync Review Kit
+===================
+
+StarSync copies the star ratings you give photos in Adobe Lightroom into
+Apple Photos. This kit lets you try it without Lightroom.
+
+  Demo Photos            Eight photos, DEMO_0001 to DEMO_0008, unrated.
+  Demo Library.lrlibrary A Lightroom library that rates seven of them,
+                         from one star to five, and leaves DEMO_0007 unrated.
+
+
+Trying it
+---------
+
+1. Import the photos into Photos: drag the Demo Photos folder onto the
+   Photos window, or use File > Import.
+
+2. Open StarSync and allow access to Photos when asked. It needs to read
+   and write, because writing star ratings is what it does.
+
+3. Click "Choose Lightroom Library..." and choose Demo Library.lrlibrary
+   from this folder.
+
+4. Choose the "StarSync Review" album, then click Continue.
+
+5. Review shows 7 ratings to write, and DEMO_0007 under "Leaving alone":
+   it is unrated in Lightroom, and StarSync never clears a rating with a
+   zero. Nothing has been written yet.
+
+6. Click "Write 7 ratings". In Photos, select DEMO_0001 and open the Info
+   panel (Command-I): it now has five stars.
+
+7. Back in StarSync, click "Revert this sync". The ratings are removed
+   from Photos again.
+
+
+To see a conflict
+-----------------
+
+Before step 4, give DEMO_0002 one star in Photos. Review will then ask you
+to choose between Lightroom's four stars and Photos' one, and writes
+nothing for that photo until you do.
+
+
+StarSync opens the Lightroom library read-only and never changes it. The
+only thing it writes to Photos is the star rating. Nothing leaves the Mac.

@@ -223,7 +223,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = StarSync;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Chip Cressman";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StarSync reads your photos' star ratings and writes the ratings from Lightroom onto the matching photos.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -250,7 +251,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = StarSync;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Chip Cressman";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StarSync reads your photos' star ratings and writes the ratings from Lightroom onto the matching photos.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -10,6 +10,25 @@
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+		  SyncController reads the modification date of the catalog inside the
+		  Lightroom library before a run, to tell whether it needs reading
+		  again. That library is one the person chose themselves in an open
+		  panel, which is what 3B52.1 covers. Nothing about the date leaves
+		  the Mac.
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>3B52.1</string>
+			</array>
+		</dict>
+		<!--
+		  CatalogBookmark keeps the security-scoped bookmark to the chosen
+		  library in the app's own defaults, read only by this app (CA92.1).
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
