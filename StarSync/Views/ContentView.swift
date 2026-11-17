@@ -26,8 +26,11 @@ struct ContentView: View {
         .frame(minWidth: 820, minHeight: 560)
         .task {
             // Pick the library back up where it was left, so the common case
-            // is opening the app and pressing Continue.
-            if controller.libraryURL != nil, controller.catalog == nil {
+            // is opening the app and pressing Continue. Not if the last read
+            // never finished: that read may be what stopped the app, and
+            // repeating it here would stop it again on every launch.
+            if controller.libraryURL != nil, controller.catalog == nil,
+               !controller.lastReadDidNotFinish {
                 await controller.load()
             }
         }

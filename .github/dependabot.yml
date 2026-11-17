@@ -1,0 +1,19 @@
+# Keeps the actions used in .github/workflows/ up to date.
+#
+# The workflows pin each third-party action to a commit SHA, which is safe but
+# means fixes to actions/checkout and github/codeql-action never arrive on
+# their own. Dependabot checks weekly and opens one grouped PR that bumps the
+# SHAs and their version comments together. The Swift package has no external
+# dependencies, so there is no swift entry here.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -64,6 +64,17 @@ struct SourceStepView: View {
                     Spacer()
                     Button("Change…") { chooseLibrary() }
                 }
+                if controller.lastReadDidNotFinish {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("Reading this library did not finish the last time StarSync was open, so it has not been read again. You can try again, or choose a different library.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button("Try Again") { Task { await controller.retryLoad() } }
+                            .disabled(controller.isWorking)
+                    }
+                }
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Choose your Lightroom library")

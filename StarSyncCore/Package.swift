@@ -9,7 +9,10 @@ let package = Package(
         .executable(name: "starsync-catalog", targets: ["starsync-catalog"]),
     ],
     targets: [
-        .target(name: "StarSyncCore"),
+        // A one-function C wrapper: sqlite3_db_config is variadic, which
+        // Swift cannot call, and the catalog connection needs it.
+        .target(name: "CSQLiteShim", linkerSettings: [.linkedLibrary("sqlite3")]),
+        .target(name: "StarSyncCore", dependencies: ["CSQLiteShim"]),
         .executableTarget(name: "starsync-catalog", dependencies: ["StarSyncCore"]),
         .testTarget(
             name: "StarSyncCoreTests",

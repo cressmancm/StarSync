@@ -25,6 +25,29 @@ public struct MessagePackError: Error, CustomStringConvertible {
 // MARK: - Decoding
 
 public enum MessagePack {
+    /// The deepest container nesting the reader accepts; one level deeper
+    /// throws.
+    ///
+    /// The reader recurses once per level, and the catalog is untrusted: a blob
+    /// of a few thousand `0x91` bytes (one-element arrays inside one another)
+    /// would otherwise overflow the stack and kill the app, which then dies
+    /// again at every launch because it reopens the remembered catalog. Real
+    /// Lightroom records nest well under 20 deep, so 64 leaves room for future
+    /// shapes while keeping the worst case far inside even a 512 KB
+    /// secondary-thread stack. Everything built from a decoded value
+    /// (`Equatable`, `description`, deinit) recurses too, and inherits the
+    /// same bound.
+    static let maxNestingDepth = 64
+
+    /// The most elements any one container reserves room for up front.
+    ///
+    /// A declared count is only checked against the bytes left, so a large
+    /// blob could still claim millions of elements; reserving that much at
+    /// every level of nesting multiplies it. Growing past this as elements
+    /// actually arrive costs a few reallocations at most, and those are paid
+    /// for by real input bytes.
+    static let maxReservation = 256
+
     /// Decodes the first MessagePack value in `data`.
     public static func decode(_ data: Data) throws -> MPValue {
         var reader = Reader(data)
@@ -49,8 +72,14 @@ public enum MessagePack {
 private struct Reader {
     let bytes: [UInt8]
     var index: Int = 0
+    /// How many containers enclose the value being read.
+    var depth: Int = 0
 
     init(_ data: Data) { self.bytes = [UInt8](data) }
+
+    /// Never negative: `index` only moves forward through `byte`, `slice` and
+    /// `skip`, all of which check it against `bytes.count` first.
+    private var remaining: Int { bytes.count - index }
 
     mutating func topLevelMap(skipping skipped: Set<String>) throws -> [String: MPValue] {
         let header = try byte()
@@ -62,7 +91,10 @@ private struct Reader {
         default:
             throw MessagePackError("expected a map at offset 0, found 0x\(hex(header))")
         }
-        var result = [String: MPValue](minimumCapacity: count)
+        try checkMapCount(count)
+        try enterContainer()
+        defer { depth -= 1 }
+        var result = [String: MPValue](minimumCapacity: min(count, MessagePack.maxReservation))
         for _ in 0..<count {
             guard case let .string(key) = try value() else {
                 throw MessagePackError("map key was not a string")
@@ -123,14 +155,78 @@ private struct Reader {
     }
 
     /// Advances past one value without building it.
+    ///
+    /// Throws for exactly the input `value()` throws for, so skipping a key
+    /// never lets a malformed record through that decoding it would have
+    /// rejected: the same tags, the same bounds, the same depth limit, and the
+    /// same restriction on map key types.
     mutating func skipValue() throws {
-        _ = try value()
+        let header = try byte()
+        switch header {
+        case 0x00...0x7f, 0xe0...0xff, 0xc0, 0xc2, 0xc3: return
+        case 0x80...0x8f: try skipMap(count: Int(header & 0x0f))
+        case 0x90...0x9f: try skipArray(count: Int(header & 0x0f))
+        case 0xa0...0xbf: try skip(Int(header & 0x1f))
+        case 0xc4, 0xd9: try skip(Int(try byte()))
+        case 0xc5, 0xda: try skip(Int(try uint16()))
+        case 0xc6, 0xdb: try skip(Int(try uint32()))
+        case 0xcc, 0xd0: try skip(1)
+        case 0xcd, 0xd1: try skip(2)
+        case 0xca, 0xce, 0xd2: try skip(4)
+        case 0xcb, 0xcf, 0xd3: try skip(8)
+        case 0xdc: try skipArray(count: Int(try uint16()))
+        case 0xdd: try skipArray(count: Int(try uint32()))
+        case 0xde: try skipMap(count: Int(try uint16()))
+        case 0xdf: try skipMap(count: Int(try uint32()))
+        // Extensions: one type byte, then the payload.
+        case 0xd4: try skip(1 + 1)
+        case 0xd5: try skip(1 + 2)
+        case 0xd6: try skip(1 + 4)
+        case 0xd7: try skip(1 + 8)
+        case 0xd8: try skip(1 + 16)
+        case 0xc7: let n = Int(try byte()); try skip(1 + n)
+        case 0xc8: let n = Int(try uint16()); try skip(1 + n)
+        case 0xc9: let n = Int(try uint32()); try skip(1 + n)
+        default:
+            throw MessagePackError("unsupported tag 0x\(hex(header)) at offset \(index - 1)")
+        }
     }
 
     // MARK: Containers
 
+    /// Counts a container that is about to be read, throwing past the limit.
+    /// Callers pair it with `defer { depth -= 1 }`.
+    private mutating func enterContainer() throws {
+        guard depth < MessagePack.maxNestingDepth else {
+            throw MessagePackError(
+                "containers nested deeper than \(MessagePack.maxNestingDepth) at offset \(index)")
+        }
+        depth += 1
+    }
+
+    /// Every array element takes at least one byte, so a count larger than
+    /// the bytes left is certainly a lie. Rejecting it here, before anything
+    /// is reserved or looped over, keeps a five-byte blob from claiming four
+    /// billion elements.
+    private func checkArrayCount(_ count: Int) throws {
+        guard count <= remaining else {
+            throw MessagePackError("array of \(count) elements runs past the end of data")
+        }
+    }
+
+    /// As `checkArrayCount`, but each map entry is a key and a value: at
+    /// least two bytes.
+    private func checkMapCount(_ count: Int) throws {
+        guard count <= remaining / 2 else {
+            throw MessagePackError("map of \(count) entries runs past the end of data")
+        }
+    }
+
     private mutating func map(count: Int) throws -> [String: MPValue] {
-        var result = [String: MPValue](minimumCapacity: count)
+        try checkMapCount(count)
+        try enterContainer()
+        defer { depth -= 1 }
+        var result = [String: MPValue](minimumCapacity: min(count, MessagePack.maxReservation))
         for _ in 0..<count {
             let key = try value()
             let v = try value()
@@ -138,17 +234,47 @@ private struct Reader {
             case .string(let s): result[s] = v
             case .uint(let u): result[String(u)] = v
             case .int(let i): result[String(i)] = v
-            default: throw MessagePackError("unsupported map key \(key)")
+            // Name the key's kind, not the key: interpolating it whole would
+            // copy a hostile multi-megabyte binary key into the message.
+            default: throw MessagePackError("unsupported map key of kind \(key.kind)")
             }
         }
         return result
     }
 
     private mutating func array(count: Int) throws -> [MPValue] {
+        try checkArrayCount(count)
+        try enterContainer()
+        defer { depth -= 1 }
         var result = [MPValue]()
-        result.reserveCapacity(count)
+        result.reserveCapacity(min(count, MessagePack.maxReservation))
         for _ in 0..<count { result.append(try value()) }
         return result
+    }
+
+    private mutating func skipMap(count: Int) throws {
+        try checkMapCount(count)
+        try enterContainer()
+        defer { depth -= 1 }
+        for _ in 0..<count {
+            // `map(count:)` accepts only string and integer keys; check the
+            // tag here so skipping is no more lenient than decoding.
+            guard index < bytes.count else { throw MessagePackError("unexpected end of data") }
+            switch bytes[index] {
+            case 0x00...0x7f, 0xe0...0xff, 0xa0...0xbf, 0xd9...0xdb, 0xcc...0xd3: break
+            default:
+                throw MessagePackError("unsupported map key tag 0x\(hex(bytes[index])) at offset \(index)")
+            }
+            try skipValue()
+            try skipValue()
+        }
+    }
+
+    private mutating func skipArray(count: Int) throws {
+        try checkArrayCount(count)
+        try enterContainer()
+        defer { depth -= 1 }
+        for _ in 0..<count { try skipValue() }
     }
 
     private mutating func ext(fixed length: Int) throws -> MPValue {
@@ -182,11 +308,23 @@ private struct Reader {
     }
 
     private mutating func slice(count: Int) throws -> ArraySlice<UInt8> {
-        guard count >= 0, index + count <= bytes.count else {
-            throw MessagePackError("length \(count) runs past the end of data")
-        }
+        try checkLength(count)
         defer { index += count }
         return bytes[index..<(index + count)]
+    }
+
+    private mutating func skip(_ count: Int) throws {
+        try checkLength(count)
+        index += count
+    }
+
+    /// Compares against what is left rather than computing `index + count`,
+    /// which cannot overflow for any length a 32-bit header can declare today
+    /// but would trap rather than throw if it ever did.
+    private func checkLength(_ count: Int) throws {
+        guard count >= 0, count <= remaining else {
+            throw MessagePackError("length \(count) runs past the end of data")
+        }
     }
 
     private mutating func string(count: Int) throws -> String {
@@ -201,8 +339,27 @@ private struct Reader {
     }
 }
 
+// Plain Swift rather than `String(format:)`: C varargs are type-checked only by
+// convention, and an error path is the last place to risk one being wrong.
 private func hex(_ b: UInt8) -> String {
-    String(format: "%02x", b)
+    let digits = String(b, radix: 16)
+    return b < 0x10 ? "0" + digits : digits
+}
+
+private extension MPValue {
+    /// A short name for error messages that must not echo untrusted content.
+    var kind: String {
+        switch self {
+        case .nil_: "nil"
+        case .bool: "bool"
+        case .int, .uint: "integer"
+        case .double: "float"
+        case .string: "string"
+        case .binary: "binary"
+        case .array: "array"
+        case .map: "map"
+        }
+    }
 }
 
 // MARK: - Convenience accessors
@@ -213,11 +370,21 @@ public extension MPValue {
         return nil
     }
 
+    /// The value as an `Int`, or nil when it is not a number or does not fit.
+    ///
+    /// Ratings and pixel dimensions come straight from the catalog, so a
+    /// hostile one can hold `UInt64.max`, NaN or 1e300; the plain `Int(_:)`
+    /// conversions trap on all of those. Doubles truncate toward zero as they
+    /// always have (4.7 is 4), but only once they are known to land in range.
     var intValue: Int? {
         switch self {
-        case .int(let i): return Int(i)
-        case .uint(let u): return Int(u)
-        case .double(let d): return Int(d)
+        case .int(let i): return Int(exactly: i)
+        case .uint(let u): return Int(exactly: u)
+        case .double(let d):
+            // -2^63 is exactly Int.min; 2^63 is one past Int.max, and no
+            // double lies strictly between Int.max and 2^63.
+            guard d.isFinite, d >= -0x1p63, d < 0x1p63 else { return nil }
+            return Int(d)
         default: return nil
         }
     }

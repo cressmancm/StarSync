@@ -44,6 +44,12 @@ final class SyncController {
     var lastRun: SyncRun?
     /// Set after a successful revert, so the Done screen can report it.
     var revertedCount: Int?
+    /// The last time the app was open, reading this library never finished.
+    ///
+    /// Set at launch from the mark `CatalogBookmark` leaves on disk. While it
+    /// is set the library is not read automatically, since doing so may be
+    /// what stopped the app last time; the person chooses to try again.
+    var lastReadDidNotFinish = false
 
     /// When the catalog file was last written, as of the read in `load()`.
     ///
@@ -54,6 +60,7 @@ final class SyncController {
 
     init() {
         libraryURL = CatalogBookmark.restore()
+        lastReadDidNotFinish = CatalogBookmark.hasUnfinishedRead && libraryURL != nil
         lastRun = UndoLog.shared.mostRecentRun
     }
 
@@ -135,11 +142,7 @@ final class SyncController {
             try await PhotosLibrary.requestAccess()
 
             statusMessage = "Reading the Lightroom catalog…"
-            let catalog = try await Task.detached(priority: .userInitiated) {
-                try CatalogBookmark.withAccess(to: libraryURL) {
-                    try CatalogReader(libraryURL: libraryURL).read()
-                }
-            }.value
+            let catalog = try await Self.readCatalog(at: libraryURL)
 
             statusMessage = "Reading your Photos library…"
             let photos = await Task.detached(priority: .userInitiated) {
@@ -155,6 +158,24 @@ final class SyncController {
         }
     }
 
+    /// Reads the library again after the last attempt never finished.
+    func retryLoad() async {
+        lastReadDidNotFinish = false
+        await load()
+    }
+
+    /// Reads the catalog off the main actor, with the unfinished-read mark
+    /// set for exactly as long as the read is running.
+    private static func readCatalog(at libraryURL: URL) async throws -> LRCatalog {
+        CatalogBookmark.beginRead()
+        defer { CatalogBookmark.endRead() }
+        return try await Task.detached(priority: .userInitiated) {
+            try CatalogBookmark.withAccess(to: libraryURL) {
+                try CatalogReader(libraryURL: libraryURL).read()
+            }
+        }.value
+    }
+
     func chooseLibrary(_ url: URL) async {
         do {
             try CatalogBookmark.save(url)
@@ -163,6 +184,7 @@ final class SyncController {
             return
         }
         libraryURL = url
+        lastReadDidNotFinish = false
         catalog = nil
         photos = nil
         plan = nil
@@ -257,11 +279,7 @@ final class SyncController {
         else { return nil }
 
         statusMessage = "Checking Lightroom…"
-        guard let fresh = try? await Task.detached(priority: .userInitiated, operation: {
-            try CatalogBookmark.withAccess(to: libraryURL) {
-                try CatalogReader(libraryURL: libraryURL).read()
-            }
-        }).value else {
+        guard let fresh = try? await Self.readCatalog(at: libraryURL) else {
             // Unreadable right now — Lightroom may be mid-write. Writing is
             // still safe: every row is checked against Photos regardless, and
             // a row whose Lightroom rating moved will be caught on the next

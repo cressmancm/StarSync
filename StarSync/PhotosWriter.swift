@@ -167,8 +167,17 @@ enum PhotosWriter {
             }
 
             // Saved with this batch's live ratings before the batch is written.
+            // If it cannot be saved, nothing more is written: a batch whose
+            // earlier ratings are not on disk is a batch Revert would put
+            // back wrong. What already landed is still recorded below.
             run.entries = sortedEntries(entries)
-            try? UndoLog.shared.save(run)
+            do {
+                try UndoLog.shared.save(run)
+            } catch {
+                for identifier in targets.keys { entries[identifier] = nil }
+                result.failed.append((filename: "—", reason: "Could not save the undo log, so the rest of the run was not written: \(error.localizedDescription)"))
+                break
+            }
 
             do {
                 try await PHPhotoLibrary.shared().performChanges {
@@ -211,7 +220,11 @@ enum PhotosWriter {
         // Keep only what actually landed, so a revert cannot try to undo a
         // write that never happened.
         run.entries = sortedEntries(entries)
-        try? UndoLog.shared.save(run)
+        do {
+            try UndoLog.shared.save(run)
+        } catch {
+            result.failed.append((filename: "—", reason: "Could not update the undo log: \(error.localizedDescription)"))
+        }
 
         result.written = written
         result.run = run
@@ -231,24 +244,34 @@ enum PhotosWriter {
         var result = Result()
         let assets = PhotosLibrary.assets(withIdentifiers: run.entries.map(\.localIdentifier))
         var restored = 0
+        var processed = 0
 
         for batch in run.entries.chunked(into: batchSize) {
+            // Worked out before the change block rather than inside it, so
+            // the count reported is the photos actually changed, not every
+            // entry the batch held. The old rating comes from a file on disk,
+            // so it is checked rather than trusted.
+            let changes: [(asset: PHAsset, rating: PHAsset.Rating)] = batch.compactMap { entry in
+                guard (0...5).contains(entry.oldRating),
+                      let asset = assets[entry.localIdentifier],
+                      let value = PHAsset.Rating(rawValue: entry.oldRating),
+                      asset.canPerform(.properties)
+                else { return nil }
+                return (asset, value)
+            }
             do {
                 try await PHPhotoLibrary.shared().performChanges {
-                    for entry in batch {
-                        guard let asset = assets[entry.localIdentifier],
-                              let value = PHAsset.Rating(rawValue: entry.oldRating),
-                              asset.canPerform(.properties)
-                        else { continue }
-                        let request = PHAssetChangeRequest(for: asset)
-                        request.rating = value
+                    for change in changes {
+                        let request = PHAssetChangeRequest(for: change.asset)
+                        request.rating = change.rating
                     }
                 }
-                restored += batch.count
+                restored += changes.count
             } catch {
                 result.failed.append((filename: "—", reason: error.localizedDescription))
             }
-            await progress(restored, run.entries.count)
+            processed += batch.count
+            await progress(processed, run.entries.count)
         }
 
         if result.failed.isEmpty {
