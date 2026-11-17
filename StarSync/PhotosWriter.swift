@@ -28,13 +28,18 @@ enum PhotosWriter {
         /// What the preview was going to write.
         let plannedRating: Int
 
-        /// One line naming which side moved and what it says now.
-        var detail: String {
+        /// Which side moved and what it says now, without the file name.
+        ///
+        /// Kept apart from the name rather than being one sentence, so the
+        /// Done screen can draw the name as something you can select and copy
+        /// — it is the string you would paste into a search field in whichever
+        /// app this line is telling you to go and look at.
+        var note: String {
             switch reason {
             case .photosChanged:
-                return "\(filename) — Photos has \(liveRating)★, Lightroom has \(plannedRating)★"
+                return "Photos has \(liveRating)★, Lightroom has \(plannedRating)★"
             case .lightroomChanged:
-                return "\(filename) — Lightroom now has \(liveRating)★, the preview had \(plannedRating)★"
+                return "Lightroom now has \(liveRating)★, the preview had \(plannedRating)★"
             }
         }
     }

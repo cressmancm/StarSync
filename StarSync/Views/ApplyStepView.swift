@@ -33,9 +33,7 @@ struct ApplyStepView: View {
                         Text("\(result.skipped.count) left alone — changed since the preview was built:")
                             .font(.callout.weight(.medium))
                         ForEach(Array(result.skipped.prefix(6).enumerated()), id: \.offset) { _, skip in
-                            Text(skip.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            NamedLine(name: skip.filename, note: skip.note)
                         }
                         if result.skipped.count > 6 {
                             Text("and \(result.skipped.count - 6) more")
@@ -56,9 +54,7 @@ struct ApplyStepView: View {
                         Text("\(result.failed.count) could not be written:")
                             .font(.callout.weight(.medium))
                         ForEach(Array(result.failed.prefix(6).enumerated()), id: \.offset) { _, failure in
-                            Text("\(failure.filename) — \(failure.reason)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            NamedLine(name: failure.filename, note: failure.reason)
                         }
                         if result.failed.count > 6 {
                             Text("and \(result.failed.count - 6) more")
@@ -96,5 +92,32 @@ struct ApplyStepView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// One photo this run could not settle, named first and then explained.
+///
+/// The name is drawn on its own so it can be selected and copied, because
+/// every line in these two lists is telling you to go and look at that photo
+/// in Lightroom or in Photos — and the first thing you do there is search for
+/// it by name.
+///
+/// The name keeps its width and the explanation gives way around it: a name
+/// cut in half is useless, while a failure reason from PhotoKit can run long
+/// and reads perfectly well wrapped onto a second line, which is what it did
+/// before it had a name beside it.
+private struct NamedLine: View {
+    let name: String
+    let note: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            FileNameText(name: name)
+                .layoutPriority(1)
+            Text("— \(note)")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
