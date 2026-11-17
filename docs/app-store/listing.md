@@ -41,8 +41,8 @@ Free, in every territory.
 **Data Not Collected.** StarSync makes no network connections, has no account,
 and collects nothing. The privacy manifest in the app says the same.
 
-Privacy Policy URL: `https://chipcressman.com/starsync/privacy`, publishing
-[`privacy-policy.md`](privacy-policy.md). It has to be live before you submit.
+Privacy Policy URL: `https://chipcressman.com/starsync/privacy`, which
+publishes [`privacy-policy.md`](privacy-policy.md). Live since 17 November 2026.
 
 ## Version 1.0
 

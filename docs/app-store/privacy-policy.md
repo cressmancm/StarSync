@@ -1,5 +1,7 @@
 # StarSync Privacy Policy
 
+<!-- Published at https://chipcressman.com/starsync/privacy, from starsync/privacy.html in the Portfolio repo. Change both together. -->
+
 *Last updated 17 November 2026*
 
 StarSync collects no data about you.
@@ -22,4 +24,4 @@ is never written to.
 ratings before and after — so that Revert can undo it. It stays inside the
 app's own container on your Mac, and deleting the app deletes it.
 
-**Contact.** Questions about this policy: chipcressman.com/starsync.
+**Contact.** Questions about this policy: hello@chipcressman.com.
