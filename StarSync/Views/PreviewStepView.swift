@@ -63,24 +63,30 @@ struct PreviewStepView: View {
 
     // MARK: Grouping
 
-    /// Which bucket a row belongs in. Exactly one is true for every row.
+    /// Which section a row lives in, decided by what planning found rather
+    /// than by what the row is currently going to do.
     ///
-    /// A row that was put to you stays put once you answer it, rather than
-    /// moving to whichever section its answer implies. Clicking a star used to
-    /// make the row leave the list from under the cursor, which gave you no
-    /// chance to see what you had just done, let alone check it — and pressing
-    /// "Keep all from Photos" emptied the section in one go. Being able to look
-    /// back over your own answers matters more here than filing each row under
-    /// its eventual fate, which the row states for itself anyway.
-    private func belongs(_ change: PlannedChange, to group: RowGroup) -> Bool {
-        switch group {
-        case .needsDecision: return change.needsReview
-        case .willWrite: return !change.needsReview && change.willWrite
-        // Not a planned change at all — those rows come from `plan.ambiguous`,
-        // which is `[Match]`, since there is no single photo to plan against.
-        case .ambiguous: return false
-        case .leavingAlone: return !change.needsReview && !change.willWrite
+    /// `reason` is set when the plan is built and never changes afterwards, so
+    /// a row cannot move however you edit it. That is the point. Grouping by
+    /// the outcome meant a row left the list from under the cursor the instant
+    /// you clicked a star — no chance to see what you had just done, let alone
+    /// check it — and pressing "Keep all from Photos" emptied a whole section
+    /// in one go. Being able to look back over what you changed matters more
+    /// than filing each row under its eventual fate, which the row says for
+    /// itself in its badge and in the line beside its stars.
+    private static func section(for reason: ChangeReason) -> RowGroup {
+        switch reason {
+        case .conflict: return .needsDecision
+        case .newRating: return .willWrite
+        case .alreadyMatches, .notRatedInLightroom, .notEditable: return .leavingAlone
         }
+    }
+
+    private func belongs(_ change: PlannedChange, to group: RowGroup) -> Bool {
+        // `ambiguous` holds no planned changes at all — those rows come from
+        // `plan.ambiguous`, which is `[Match]`, since there is no single photo
+        // to plan against.
+        group != .ambiguous && Self.section(for: change.reason) == group
     }
 
     private func count(for group: RowGroup) -> Int {
@@ -131,34 +137,37 @@ struct PreviewStepView: View {
             return "\(decided.formatted()) decided · \(waiting.formatted()) still waiting"
         }
 
-        // Decided rows that will write stay upstairs, so this section no
-        // longer holds every write the headline is counting. Say where the
-        // rest of them are rather than leaving two numbers to disagree.
+        // Rows stay where planning put them, so this section is no longer the
+        // list of everything that will write: a row you decided above, or
+        // rated down below, writes from where it sits. Give the real total
+        // rather than leaving two numbers on screen to disagree.
         if group == .willWrite, let plan {
-            let above = plan.changes.count(where: { $0.needsReview && $0.willWrite })
-            guard above > 0 else { return nil }
-            return "plus \(above.formatted()) you decided above"
+            let here = plan.changes.count(where: { belongs($0, to: .willWrite) && $0.willWrite })
+            guard here != plan.writes.count else { return nil }
+            return "\(plan.writes.count.formatted()) will write in all"
         }
 
         guard group == .leavingAlone, let plan else { return nil }
-        var matches = 0, notRated = 0, readOnly = 0, chosen = 0
+        var matches = 0, notRated = 0, readOnly = 0, nowWriting = 0
         for change in plan.changes where belongs(change, to: .leavingAlone) {
+            // Rated by hand since, so this section's name no longer covers it.
+            // Called out here as well as on the row, because this is the one
+            // section that is collapsed by default.
+            if change.willWrite { nowWriting += 1 }
             switch change.reason {
             case .alreadyMatches: matches += 1
             case .notRatedInLightroom: notRated += 1
             case .notEditable: readOnly += 1
-            // A row you set by hand to the rating Photos already holds. A
-            // decided conflict cannot reach this section any more — it stays
-            // where you answered it — but the case is kept so that the switch
-            // covers every reason.
-            case .newRating, .conflict: chosen += 1
+            // Filed elsewhere by `section(for:)`, and listed here only so the
+            // switch covers every reason there is.
+            case .newRating, .conflict: break
             }
         }
         var parts: [String] = []
         if matches > 0 { parts.append("\(matches.formatted()) already match") }
         if notRated > 0 { parts.append("\(notRated.formatted()) not rated in Lightroom") }
         if readOnly > 0 { parts.append("\(readOnly.formatted()) read-only") }
-        if chosen > 0 { parts.append("\(chosen.formatted()) you chose to leave") }
+        if nowWriting > 0 { parts.append("\(nowWriting.formatted()) you set to write") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -395,8 +404,17 @@ extension PlannedChange {
     /// itself as you work down it.
     var isDecided: Bool { needsReview && newRating != nil }
 
+    /// A row you changed by hand, in a section that was not asking you to.
+    ///
+    /// Rows stay where planning put them, so one you rate yourself sits under
+    /// a heading that no longer describes it — a photo under "Leaving alone"
+    /// that is now going to be written. The badge has to say so, since the
+    /// heading above it does not.
+    var isYourChange: Bool { isManualOverride && !needsReview }
+
     var badgeText: String {
         if isDecided { return "Decided" }
+        if isYourChange { return willWrite ? "Will write" : "Leaving alone" }
         switch reason {
         case .newRating: return "New rating"
         case .conflict: return "Conflict"
@@ -408,6 +426,7 @@ extension PlannedChange {
 
     var badgeTone: ActionBadge.Tone {
         if isDecided { return .decided }
+        if isYourChange { return willWrite ? .write : .neutral }
         switch reason {
         case .newRating: return .write
         case .conflict: return .conflict
@@ -416,9 +435,9 @@ extension PlannedChange {
         }
     }
 
-    /// A tick on the rows you have answered, so the section can be scanned for
-    /// what is left without reading a single word of it.
-    var badgeSymbol: String? { isDecided ? "checkmark" : nil }
+    /// A tick on every row you touched — answered, or rated yourself — so a
+    /// section can be scanned for your own marks without reading a word of it.
+    var badgeSymbol: String? { isDecided || isYourChange ? "checkmark" : nil }
 
     var outcomeText: String {
         if !photo.isEditable { return "Cannot change" }
