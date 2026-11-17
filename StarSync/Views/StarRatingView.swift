@@ -47,13 +47,19 @@ struct StarRatingPicker: View {
 struct ActionBadge: View {
     let text: String
     let tone: Tone
+    /// An SF Symbol drawn before the text.
+    var symbol: String? = nil
 
     enum Tone {
-        case write, conflict, neutral, blocked
+        case write, conflict, decided, neutral, blocked
 
         var color: Color {
             switch self {
             case .write: return .accentColor
+            // Not the accent colour, though this is a good outcome: a decided
+            // row sits inches from "Will write" rows wearing the accent, and
+            // the point of the badge is to tell the two apart at a glance.
+            case .decided: return .green
             case .conflict: return .orange
             case .neutral: return .secondary
             case .blocked: return .red
@@ -62,11 +68,16 @@ struct ActionBadge: View {
     }
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(tone.color.opacity(0.14), in: Capsule())
-            .foregroundStyle(tone.color)
+        HStack(spacing: 3) {
+            if let symbol {
+                Image(systemName: symbol).imageScale(.small)
+            }
+            Text(text)
+        }
+        .font(.caption2.weight(.medium))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(tone.color.opacity(0.14), in: Capsule())
+        .foregroundStyle(tone.color)
     }
 }

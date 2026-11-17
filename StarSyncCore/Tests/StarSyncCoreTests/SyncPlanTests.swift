@@ -107,7 +107,7 @@ struct SyncPlanTests {
         #expect(plan.writes.count == 1)
         #expect(plan.pendingReview.count == 2)
 
-        plan.resolveAllRemainingFromLightroom()
+        plan.takeAllFromLightroom()
         #expect(plan.pendingReview.isEmpty)
         #expect(plan.writes.count == 3)
     }
@@ -115,9 +115,40 @@ struct SyncPlanTests {
     @Test("keeping Photos' side resolves a review without writing")
     func keepPhotos() {
         var plan = SyncPlanner.plan(from: report([(5, 3)]))
-        plan.keepAllRemainingFromPhotos()
+        plan.keepAllFromPhotos()
         #expect(plan.pendingReview.isEmpty)
         #expect(plan.writes.isEmpty)
+    }
+
+    @Test("either bulk answer can be taken back by pressing the other")
+    func changingYourMind() {
+        var plan = SyncPlanner.plan(from: report([(5, 3), (4, 2)]))
+
+        plan.takeAllFromLightroom()
+        #expect(plan.writes.count == 2)
+
+        // The second press has to reach the rows the first one answered.
+        // While these only touched what was still unanswered, one press left
+        // nothing for the other to act on, and a misclick could only be undone
+        // by going back through the rows one at a time.
+        plan.keepAllFromPhotos()
+        #expect(plan.writes.isEmpty)
+
+        plan.takeAllFromLightroom()
+        #expect(plan.writes.count == 2)
+    }
+
+    @Test("a bulk answer overtakes one made row by row")
+    func bulkOvertakesPerRow() {
+        var plan = SyncPlanner.plan(from: report([(5, 3), (4, 2)]))
+        plan.setRating(3, for: plan.changes[0].id)
+        #expect(plan.writes.isEmpty)
+
+        // The price of being able to change your mind about the whole set in
+        // one click. Nothing is written here, and every row still shows what
+        // it is going to do.
+        plan.takeAllFromLightroom()
+        #expect(plan.writes.count == 2)
     }
 
     @Test("a single row can be overridden by hand")

@@ -129,7 +129,7 @@ struct RecheckTests {
             ambiguous: []
         )
         #expect(plan.changes[0].needsReview)
-        plan.resolveAllRemainingFromLightroom()
+        plan.takeAllFromLightroom()
         #expect(plan.changes[0].isManualOverride)
         #expect(plan.manualOverrides.count == 1)
         // And it survives Photos moving, because it was asked for.
@@ -144,7 +144,7 @@ struct RecheckTests {
             unmatchedCount: 0,
             ambiguous: []
         )
-        plan.keepAllRemainingFromPhotos()
+        plan.keepAllFromPhotos()
         #expect(plan.writes.isEmpty)
     }
 }

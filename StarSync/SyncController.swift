@@ -336,11 +336,11 @@ final class SyncController {
     }
 
     func takeAllFromLightroom() {
-        plan?.resolveAllRemainingFromLightroom()
+        plan?.takeAllFromLightroom()
     }
 
     func keepAllFromPhotos() {
-        plan?.keepAllRemainingFromPhotos()
+        plan?.keepAllFromPhotos()
     }
 
     private func describe(_ error: Error) -> String {

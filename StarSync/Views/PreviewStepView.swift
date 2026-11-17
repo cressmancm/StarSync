@@ -63,18 +63,23 @@ struct PreviewStepView: View {
 
     // MARK: Grouping
 
-    /// Which bucket a row belongs in. Exactly one is true for every row: a
-    /// row waiting on a decision has no rating to write, and anything that is
-    /// neither waiting nor writing is being left alone.
+    /// Which bucket a row belongs in. Exactly one is true for every row.
+    ///
+    /// A row that was put to you stays put once you answer it, rather than
+    /// moving to whichever section its answer implies. Clicking a star used to
+    /// make the row leave the list from under the cursor, which gave you no
+    /// chance to see what you had just done, let alone check it — and pressing
+    /// "Keep all from Photos" emptied the section in one go. Being able to look
+    /// back over your own answers matters more here than filing each row under
+    /// its eventual fate, which the row states for itself anyway.
     private func belongs(_ change: PlannedChange, to group: RowGroup) -> Bool {
-        let waiting = change.needsReview && change.newRating == nil
         switch group {
-        case .needsDecision: return waiting
-        case .willWrite: return change.willWrite
+        case .needsDecision: return change.needsReview
+        case .willWrite: return !change.needsReview && change.willWrite
         // Not a planned change at all — those rows come from `plan.ambiguous`,
         // which is `[Match]`, since there is no single photo to plan against.
         case .ambiguous: return false
-        case .leavingAlone: return !waiting && !change.willWrite
+        case .leavingAlone: return !change.needsReview && !change.willWrite
         }
     }
 
@@ -110,12 +115,31 @@ struct PreviewStepView: View {
         }
     }
 
-    /// The breakdown under "Leaving alone", so the detail survives the section
-    /// being collapsed — which it is by default.
+    /// The line under a section heading: how far through it you are, and the
+    /// breakdown under "Leaving alone", which survives that section being
+    /// collapsed — as it is by default.
     private func subtitle(for group: RowGroup) -> String? {
         if group == .ambiguous {
             return "Nothing will be written to these. They are usually virtual copies."
         }
+
+        if group == .needsDecision, let plan {
+            let waiting = plan.pendingReview.count
+            let decided = count(for: .needsDecision) - waiting
+            if decided == 0 { return nil }
+            if waiting == 0 { return "All \(decided.formatted()) decided" }
+            return "\(decided.formatted()) decided · \(waiting.formatted()) still waiting"
+        }
+
+        // Decided rows that will write stay upstairs, so this section no
+        // longer holds every write the headline is counting. Say where the
+        // rest of them are rather than leaving two numbers to disagree.
+        if group == .willWrite, let plan {
+            let above = plan.changes.count(where: { $0.needsReview && $0.willWrite })
+            guard above > 0 else { return nil }
+            return "plus \(above.formatted()) you decided above"
+        }
+
         guard group == .leavingAlone, let plan else { return nil }
         var matches = 0, notRated = 0, readOnly = 0, chosen = 0
         for change in plan.changes where belongs(change, to: .leavingAlone) {
@@ -123,8 +147,10 @@ struct PreviewStepView: View {
             case .alreadyMatches: matches += 1
             case .notRatedInLightroom: notRated += 1
             case .notEditable: readOnly += 1
-            // A conflict resolved to the rating Photos already holds. Without
-            // this, pressing "Keep all from Photos" makes rows seem to vanish.
+            // A row you set by hand to the rating Photos already holds. A
+            // decided conflict cannot reach this section any more — it stays
+            // where you answered it — but the case is kept so that the switch
+            // covers every reason.
             case .newRating, .conflict: chosen += 1
             }
         }
@@ -260,7 +286,11 @@ private struct PreviewRow: View {
                 )
                 .font(.body)
                 HStack(spacing: 7) {
-                    ActionBadge(text: change.badgeText, tone: change.badgeTone)
+                    ActionBadge(
+                        text: change.badgeText,
+                        tone: change.badgeTone,
+                        symbol: change.badgeSymbol
+                    )
                     if let flag = change.asset.flag {
                         Text(flag.capitalized)
                             .font(.caption2)
@@ -358,7 +388,15 @@ private struct AmbiguousRow: View {
 // MARK: - Row presentation
 
 extension PlannedChange {
+    /// A row that was put to you and that you have since answered.
+    ///
+    /// It keeps its place in "Needs your decision" and says so here instead,
+    /// so the section reads as a record of what you did rather than emptying
+    /// itself as you work down it.
+    var isDecided: Bool { needsReview && newRating != nil }
+
     var badgeText: String {
+        if isDecided { return "Decided" }
         switch reason {
         case .newRating: return "New rating"
         case .conflict: return "Conflict"
@@ -369,6 +407,7 @@ extension PlannedChange {
     }
 
     var badgeTone: ActionBadge.Tone {
+        if isDecided { return .decided }
         switch reason {
         case .newRating: return .write
         case .conflict: return .conflict
@@ -376,6 +415,10 @@ extension PlannedChange {
         case .notEditable: return .blocked
         }
     }
+
+    /// A tick on the rows you have answered, so the section can be scanned for
+    /// what is left without reading a single word of it.
+    var badgeSymbol: String? { isDecided ? "checkmark" : nil }
 
     var outcomeText: String {
         if !photo.isEditable { return "Cannot change" }

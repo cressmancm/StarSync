@@ -121,17 +121,31 @@ public struct SyncPlan: Sendable {
         changes[index].isManualOverride = true
     }
 
-    /// Resolves every row still awaiting review by taking Lightroom's rating.
-    public mutating func resolveAllRemainingFromLightroom() {
-        for index in changes.indices where changes[index].needsReview && changes[index].newRating == nil {
+    /// Answers every row that was put to you by taking Lightroom's rating.
+    ///
+    /// Every such row, not only the ones still unanswered. Answering only the
+    /// remainder would mean the first of these two calls settled the question
+    /// for good: with nothing left unanswered, the other one had nothing to
+    /// act on, and changing your mind was impossible without clicking through
+    /// the rows one at a time.
+    ///
+    /// So each is a statement about the whole set, as its label on screen
+    /// says, and pressing the other one turns the lot back over. Per-row
+    /// choices made beforehand go with them — which is the price of being
+    /// able to say "no, the other way" in one click, and is recoverable,
+    /// since nothing here writes anything.
+    public mutating func takeAllFromLightroom() {
+        for index in changes.indices where changes[index].needsReview {
             changes[index].newRating = changes[index].asset.rating
             changes[index].isManualOverride = true
         }
     }
 
-    /// Leaves every row still awaiting review as Photos has it.
-    public mutating func keepAllRemainingFromPhotos() {
-        for index in changes.indices where changes[index].needsReview && changes[index].newRating == nil {
+    /// Answers every row that was put to you by leaving Photos as it is.
+    ///
+    /// The mirror of `takeAllFromLightroom`, with the same reach.
+    public mutating func keepAllFromPhotos() {
+        for index in changes.indices where changes[index].needsReview {
             changes[index].newRating = changes[index].photo.rating
             changes[index].isManualOverride = true
         }
