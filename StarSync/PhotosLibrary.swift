@@ -27,7 +27,7 @@ enum PhotosLibrary {
             case .denied:
                 return "Open System Settings › Privacy & Security › Photos and turn on Full Access for StarSync."
             case .limited:
-                return "StarSync has to see your whole library to match it against Lightroom. Open System Settings › Privacy & Security › Photos and change StarSync to Full Access."
+                return "StarSync needs to see your whole library to match it with Lightroom. Open System Settings › Privacy & Security › Photos and change StarSync to Full Access."
             }
         }
     }

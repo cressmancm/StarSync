@@ -74,7 +74,7 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .help("Rows still waiting on you are not written. You can sync again to decide them.")
+                    .help("Photos you haven't decided on are skipped. You can sync again to decide them.")
             }
 
             if controller.step != .source {

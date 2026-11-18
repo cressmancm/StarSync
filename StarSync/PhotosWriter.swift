@@ -144,11 +144,11 @@ enum PhotosWriter {
                     )
                 case .write(let rating):
                     guard asset.canPerform(.properties) else {
-                        result.failed.append((change.displayName, "Photos will not let this photo change"))
+                        result.failed.append((change.displayName, "Photos doesn't allow changes to this photo"))
                         continue
                     }
                     guard PHAsset.Rating(rawValue: rating) != nil else {
-                        result.failed.append((change.displayName, "\(rating) is not a rating Photos accepts"))
+                        result.failed.append((change.displayName, "Photos doesn't accept a rating of \(rating)"))
                         continue
                     }
                     targets[change.photo.id] = rating

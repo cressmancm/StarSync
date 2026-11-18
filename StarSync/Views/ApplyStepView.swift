@@ -13,7 +13,7 @@ struct ApplyStepView: View {
                     .font(.system(size: 36))
                     .foregroundStyle(.secondary)
                 Text(reverted == 0
-                     ? "Nothing needed putting back."
+                     ? "There was nothing to put back."
                      : "Put \(reverted.formatted()) rating\(reverted == 1 ? "" : "s") back.")
                     .font(.title3.weight(.medium))
             } else if let result = controller.applyResult {
@@ -23,14 +23,14 @@ struct ApplyStepView: View {
                     .foregroundStyle(clean ? Color.accentColor : .orange)
 
                 Text(result.written == 0
-                     ? "Nothing needed changing."
+                     ? "There was nothing to change."
                      : "Wrote \(result.written.formatted()) rating\(result.written == 1 ? "" : "s") to Photos.")
                     .font(.title3.weight(.medium))
                     .multilineTextAlignment(.center)
 
                 if !result.skipped.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("\(result.skipped.count) left alone — changed since the preview was built:")
+                        Text("\(result.skipped.count) left alone because they changed after you reviewed them:")
                             .font(.callout.weight(.medium))
                         ForEach(Array(result.skipped.prefix(6).enumerated()), id: \.offset) { _, skip in
                             NamedLine(name: skip.filename, note: skip.note)
@@ -74,7 +74,7 @@ struct ApplyStepView: View {
                         Task { await controller.revertLastRun() }
                     }
                     .disabled(controller.isWorking)
-                    .help("Puts every rating back to what it was before this run.")
+                    .help("Puts every rating back to what it was before this sync.")
                 }
                 Button("Sync more photos") { controller.reset() }
                     .buttonStyle(.borderedProminent)

@@ -20,7 +20,7 @@ StarSync isn't Adobe's.
 
 | Field | Value |
 |---|---|
-| Name (30) | StarSync |
+| Name (30) | StarSync: Ratings to Photos |
 | Subtitle (30) | Copy star ratings into Photos |
 | Bundle ID | com.chipcressman.starsync |
 | SKU | starsync |
@@ -29,8 +29,9 @@ StarSync isn't Adobe's.
 | Content rights | Does not contain, show or access third-party content |
 | Age rating | Every question answered None, which gives 4+ |
 
-If the name is taken when you create the record, use **StarSync: Ratings to
-Photos** — still under 30.
+Plain "StarSync" was already taken on the App Store when the record was
+created, so the store name carries a tagline. The name under the icon in the
+Dock and Finder is still StarSync — that comes from the bundle, not from here.
 
 ## Pricing and Availability
 
@@ -49,37 +50,39 @@ publishes [`privacy-policy.md`](privacy-policy.md). Live since 17 November 2026.
 ### Promotional text (170)
 
 ```
-Your Lightroom star ratings, in Apple Photos. StarSync shows you every change before it writes one, and puts everything back in one click if you change your mind.
+StarSync is a lightweight app that copies star ratings from Lightroom into Apple Photos. Review changes before they're made and undo any sync.
 ```
 
 ### Description (4000)
 
 ```
-StarSync copies the star ratings you give your photos in Lightroom into Apple Photos, so the photos you've already picked out are picked out in Photos too.
+StarSync is a lightweight app that copies your star ratings from Lightroom into Apple Photos.
 
-macOS 27 is what made this possible: it's the first version of Photos with a real star rating that another app can set. StarSync reads your Lightroom library, finds each photo's match in your Photos library, and writes the rating across.
+Apple brought star ratings back to Photos, but it doesn't pick up the ratings from your Lightroom exports. StarSync reads your Lightroom library, finds the same photos in your Photos library, and copies the stars over.
 
-NOTHING HAPPENS UNTIL YOU'VE SEEN IT
-Before anything is written, StarSync lists every change it's about to make: what Lightroom says, what Photos says now, and what it will write. Change any of them, one at a time or all at once.
+BUILT WITH PRIVACY IN MIND
+No analytics, no tracking, no data collection, and no account. StarSync makes no network connections.
 
-WHERE THE TWO DISAGREE, YOU DECIDE
-If a photo already has a different rating in Photos, StarSync doesn't pick a winner. It asks you, and writes nothing for that photo until you've answered.
+SEE EVERY CHANGE FIRST
+Before anything is written, StarSync lists each photo with its rating in Lightroom, its rating in Photos, and what it plans to write. You can change any of them, one at a time or all at once.
 
-UNRATED NEVER MEANS ERASE
-A photo you haven't rated in Lightroom yet is left alone. StarSync never clears a rating you set in Photos just because Lightroom has none.
+YOU CHOOSE WHEN RATINGS DIFFER
+If a photo already has a different rating in Photos, StarSync shows you both and waits for you to pick.
 
-ONE CLICK PUTS IT ALL BACK
-Every sync is recorded before its first write, so Revert puts every rating back the way it was.
+UNRATED PHOTOS ARE SKIPPED
+If you haven't rated a photo in Lightroom yet, StarSync leaves it alone. It won't clear a rating you set in Photos.
 
-CAREFUL WITH YOUR LIBRARIES
-• Your Lightroom library is opened read-only and is never changed.
-• The star rating is the only thing StarSync ever writes to Photos.
-• StarSync checks both libraries again just before it writes. A photo that changed after you reviewed it is left alone and listed at the end, unless you chose its rating yourself.
-• Nothing leaves your Mac. No account, no network, no data collected.
+UNDO ANY SYNC
+StarSync saves the old ratings before each sync. Click Revert to put them back.
 
-Sync your whole catalog, or one album at a time.
+SAFE FOR YOUR LIBRARIES
+• Your Lightroom library is opened read-only and isn't changed.
+• Star ratings are the only thing StarSync writes to Photos.
+• StarSync checks both libraries again right before it writes. If a photo changed after you reviewed it, StarSync skips it and lists it at the end, unless you chose its rating yourself.
 
-Requires macOS 27 and a Lightroom library on your Mac — the cloud-based Lightroom, whose library is a .lrlibrary file in your Pictures folder. Lightroom Classic catalogs aren't supported.
+You can sync your whole catalog or one album at a time.
+
+Requires macOS 27 and a Lightroom library on your Mac. This is the cloud-based Lightroom, which keeps its library in a .lrlibrary file in your Pictures folder. Lightroom Classic catalogs aren't supported.
 
 StarSync is not affiliated with or endorsed by Adobe. Adobe and Lightroom are trademarks of Adobe Inc.
 ```
@@ -87,7 +90,7 @@ StarSync is not affiliated with or endorsed by Adobe. Adobe and Lightroom are tr
 ### Keywords (100)
 
 ```
-star,stars,rating,ratings,sync,photo,library,catalog,photographer,culling,raw,organize,favorites
+star,stars,rating,sync,photo,library,catalog,photographer,culling,raw,organize,favorites
 ```
 
 ### Support URL

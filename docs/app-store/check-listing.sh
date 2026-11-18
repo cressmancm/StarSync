@@ -17,9 +17,8 @@ for (name, limit), block in zip(fields, blocks):
     ok = n <= limit
     fine &= ok
     print(f"{'ok ' if ok else 'TOO LONG'} {name:<17} {n:>5} / {limit}")
-for name, value, limit in [("Name", "StarSync", 30),
-                           ("Subtitle", "Copy star ratings into Photos", 30),
-                           ("Fallback name", "StarSync: Ratings to Photos", 30)]:
+for name, value, limit in [("Name", "StarSync: Ratings to Photos", 30),
+                           ("Subtitle", "Copy star ratings into Photos", 30)]:
     ok = len(value) <= limit
     fine &= ok
     print(f"{'ok ' if ok else 'TOO LONG'} {name:<17} {len(value):>5} / {limit}")

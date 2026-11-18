@@ -66,7 +66,7 @@ struct SourceStepView: View {
                 }
                 if controller.lastReadDidNotFinish {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("Reading this library did not finish the last time StarSync was open, so it has not been read again. You can try again, or choose a different library.")
+                        Text("StarSync couldn't finish reading this library last time, so it hasn't tried again. You can try again or choose a different library.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +79,7 @@ struct SourceStepView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Choose your Lightroom library")
                         .font(.headline)
-                    Text("StarSync reads your star ratings from it. The library is opened read-only — nothing in Lightroom is ever changed.")
+                    Text("StarSync reads your star ratings from it. The library is opened read-only, and nothing in Lightroom is changed.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
