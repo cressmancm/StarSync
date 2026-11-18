@@ -2,7 +2,24 @@
 
 # StarSync
 
-**A free Mac app that copies your Lightroom star ratings into Apple Photos.**
+**A lightweight Mac app that copies your star ratings from Lightroom into Apple Photos. Free and open source.**
+
+## How it works
+
+Apple brought star ratings back to Photos, but it doesn't pick up the ratings from your Lightroom exports. StarSync reads your Lightroom library, finds the same photos in Photos, and copies the stars over.
+
+1. **Choose photos.** Pick your Lightroom library, then sync one album or your whole catalog.
+2. **Review.** StarSync lists every change before it's made. If a photo already has a different rating in Photos, you choose which one to keep.
+3. **Write.** Click Write and the stars show up in Photos. If you change your mind, Revert puts every rating back.
+
+I run it as the last step of my export. You can also run it every so often if you're still changing ratings in Lightroom.
+
+## Good to know
+
+- Star ratings are the only thing StarSync writes. Your Lightroom library is opened read-only.
+- Photos you haven't rated in Lightroom are skipped.
+- Photos are matched by filename, so if you rename files on export it will not work.
+- If several photos share a filename, StarSync compares capture time and size. If it still can't tell them apart, it skips them and tells you.
 
 ## Why I made this
 
@@ -10,37 +27,21 @@ When I shoot with my big camera, everything goes into Lightroom first. After tri
 
 Apple dropped star ratings when it discontinued iPhoto in 2015, so I was so excited when they came back to Photos in 2026. I hoped Photos would pick up the ratings I'd already given in Lightroom. It didn't, so I built StarSync.
 
-I care a lot about privacy, and I build everything with that in mind. StarSync has no analytics, no tracking, and no data collection.
-
-Built with [Claude Code](https://claude.com/claude-code). More of my work at [chipcressman.photo](https://chipcressman.photo).
-
-## What it does
-
-- **Reads your Lightroom library directly.** You don't need to export anything or install a plugin. Choose your `.lrlibrary` and StarSync reads the ratings from it.
-- **Syncs everything or one album.** Choose the whole catalog or a single album. Each album shows how many of its photos are rated, so you know what you'll get before you start.
-- **Fills in missing ratings.** If a photo has no rating in Photos, it gets the one from Lightroom.
-- **Asks before changing a rating you already set.** If a photo has three stars in Photos and five in Lightroom, StarSync shows you both and lets you pick. You can go one at a time, or take them all from Lightroom or keep them all from Photos.
-- **Shows you every change first.** The review list has a thumbnail for each photo, its rating in Lightroom, its rating in Photos, and what StarSync plans to write. You can change any row, and nothing is written until you click Write.
-- **Hides albums with no rated photos.** They would have nothing to sync. You can show them again with one click.
-- **Can be undone.** StarSync saves the old ratings before each sync, so Revert puts them all back.
-- **Skips photos you haven't rated.** No stars in Lightroom usually means you haven't gotten to that photo yet, so StarSync leaves it alone. It won't clear a rating you set in Photos.
+I'm Chip Cressman, an engineering leader in Seattle and a lifelong photographer. More of my work is at [chipcressman.com](https://chipcressman.com) and [chipcressman.photo](https://chipcressman.photo).
 
 ## Privacy
 
-I build everything with privacy in mind.
+I care a lot about privacy, and I build everything with that in mind. StarSync has no analytics, no tracking, no data collection, and no account. It makes no network connections.
 
-- **No tracking or data collection.** StarSync makes no network connections. There are no accounts, no analytics, and no crash reporting.
-- **Your Lightroom library isn't changed.** StarSync opens it read-only and works from a temporary copy, so a sync is safe even while Lightroom is open.
-- **Star ratings are the only thing it writes.** Titles, captions, keywords, dates, locations, albums, and the photos themselves stay as they are.
-- **Every sync can be reverted**, and nothing is written until you've reviewed the list.
+It runs in the macOS sandbox, so it can only open the Lightroom library you choose and, once you allow it, your Photos library. The code is all here under the MIT license if you want to check for yourself.
+
+[Read the privacy policy](https://chipcressman.com/starsync/privacy)
 
 ## Requirements
 
-- **macOS 27 or later.** Earlier versions of Photos don't have a star rating that an app can set.
-- **Adobe Lightroom**, the cloud-based version, with a `Lightroom Library.lrlibrary` in your Pictures folder.
-- Exports that keep the original camera filenames (`DSCF4087.jpg`), which is Lightroom's default. StarSync uses the filename to pair photos up.
-
-**Lightroom Classic is not supported.** Classic stores its ratings in a different format, and I don't use it, so StarSync won't find a Classic catalog.
+- macOS 27 or later.
+- Adobe Lightroom, the cloud-based version, with a `Lightroom Library.lrlibrary` in your Pictures folder.
+- Lightroom Classic isn't supported.
 
 ## Installing
 
@@ -60,11 +61,13 @@ open StarSync.xcodeproj
 
 Needs Xcode 27 or later. Set your own team under Signing & Capabilities and press Run.
 
-## How photos get paired up
+## Support
 
-Lightroom exports keep the camera's filename, so `DSCF4087.RAF` in Lightroom and `DSCF4087.jpg` in Photos are the same photo. Sometimes several photos share a filename, like virtual copies or two cameras that reached the same number. When that happens, StarSync compares capture time, then pixel dimensions. If it still can't tell which photo is which, it lists the photo as ambiguous and doesn't write anything to it.
+If something isn't working, or a photo was paired with the wrong one, please let me know by [opening an issue](../../issues). It helps to include your macOS version, the photo's filename in Lightroom and in Photos, and any other helpful information.
 
-Most people don't export every raw file. Those photos show up as not in Photos, which is expected.
+## Built with
+
+Swift 6, SwiftUI, PhotoKit, SQLite, and [Claude Code](https://claude.com/claude-code).
 
 ## License
 
