@@ -1,0 +1,9 @@
+{
+  "id" : "e2b61939-6741-4ac2-9e6c-1fed45e7b0bc",
+  "targets" : [
+    {
+      "id" : "8ada31cb-7568-4a71-bf0e-ea7e9411fb47",
+      "name" : "StarSync"
+    }
+  ]
+}

@@ -37,8 +37,6 @@ let shots = [
          caption: "Sync one album or your whole catalog", light: false),
     Shot(file: "apply-clean-dark.png", out: "3-done.png",
          caption: "Undo any sync", light: false),
-    Shot(file: "preview-light.png", out: "4-review-light.png",
-         caption: "You choose when ratings differ", light: true),
 ]
 
 func color(_ hex: UInt32) -> CGColor {
