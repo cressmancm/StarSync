@@ -32,13 +32,13 @@ struct Shot {
 // Review is the screen that explains what the app is for.
 let shots = [
     Shot(file: "preview-dark.png", out: "1-review.png",
-         caption: "See every change before anything is written", light: false),
+         caption: "Review every change before it's made", light: false),
     Shot(file: "source-dark.png", out: "2-choose.png",
-         caption: "Sync one album, or the whole catalog", light: false),
-    Shot(file: "apply-dark.png", out: "3-done.png",
-         caption: "One click puts every rating back", light: false),
+         caption: "Sync one album or your whole catalog", light: false),
+    Shot(file: "apply-clean-dark.png", out: "3-done.png",
+         caption: "Undo any sync", light: false),
     Shot(file: "preview-light.png", out: "4-review-light.png",
-         caption: "You settle every disagreement", light: true),
+         caption: "You choose when ratings differ", light: true),
 ]
 
 func color(_ hex: UInt32) -> CGColor {

@@ -20,7 +20,8 @@ Don't expect one in a shot.
 | `preview-dark.png` | Review | Dark | The money shot. Four conflicts waiting on a decision, one rating about to be written, and the Lightroom → Photos star columns beside each row. |
 | `preview-light.png` | Review | Light | The same album at the same scroll position, for showing the pair side by side. |
 | `source-dark.png` | Choose photos | Dark | The album list sorted by name, Entire catalog pinned at the top, counts on every row, and the "29 albums with no rated photos hidden" footer. |
-| `apply-dark.png` | Done | Dark | A finished run: "Wrote 1 rating to Photos.", and underneath it the row left alone because Photos moved on after the preview was built — rule 6 doing its job, which no other shot shows. |
+| `apply-clean-dark.png` | Done | Dark | A finished run: "Wrote 2 ratings to Photos.", with Revert this sync and Sync more photos under it. The App Store's third screenshot. |
+| `apply-clean-light.png` | Done | Light | The same screen in Light. |
 
 ## Not illustrated
 
